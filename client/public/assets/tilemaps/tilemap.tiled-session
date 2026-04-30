@@ -1,14 +1,17 @@
 {
-    "activeFile": "",
+    "activeFile": "tiled_project.tmx",
     "expandedProjectPaths": [
     ],
     "fileStates": {
         "": {
-            "scaleInDock": 0.75,
-            "scaleInEditor": 0.125
+            "scaleInDock": 1,
+            "scaleInEditor": 1.5
         },
         "#aaa": {
             "scaleInDock": 1
+        },
+        "#anim": {
+            "scaleInEditor": 1
         },
         "#tiles": {
             "scaleInDock": 1
@@ -16,22 +19,43 @@
         "#tileset": {
             "scaleInDock": 0.5,
             "scaleInEditor": 0.75
+        },
+        "tiled_project.tmx": {
+            "scale": 1.5,
+            "selectedLayer": 2,
+            "viewCenter": {
+                "x": 174,
+                "y": 164
+            }
+        },
+        "tiled_project.tmx#doors": {
+            "scaleInDock": 1
+        },
+        "tiled_project.tmx#objects": {
+            "scaleInDock": 0.75
+        },
+        "tiled_project.tmx#tiles": {
+            "scaleInDock": 0.33
         }
     },
     "last.exportedFilePath": "C:/Users/Ivan/Desktop/testws/client/public/assets/tilemaps",
-    "last.imagePath": "C:/Users/Ivan/Desktop/testws/client/public/assets",
+    "last.imagePath": "C:/Users/Ivan/Desktop/testws/client/public/assets/animations",
     "map.height": 32,
     "map.lastUsedExportFilter": "Todos los archivos (*)",
+    "map.lastUsedFormat": "tmx",
     "map.tileHeight": 32,
     "map.tileWidth": 32,
     "map.width": 24,
     "openFiles": [
+        "tiled_project.tmx"
     ],
     "project": "tilemap.tiled-project",
     "property.type": "bool",
     "recentFiles": [
+        "tiled_project.tmx"
     ],
     "tileset.embedInMap": true,
+    "tileset.lastUsedExportFilter": "Todos los archivos (*)",
     "tileset.tileSize": {
         "height": 32,
         "width": 32

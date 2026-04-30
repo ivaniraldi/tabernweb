@@ -35,12 +35,27 @@ function App() {
     const [isInventoryOpen, setIsInventoryOpen] = useState(false);
     const [isHudMinimized, setIsHudMinimized] = useState(false);
     const [contextMenu, setContextMenu] = useState(null); // { x, y, playerId, username }
+    const [chestData, setChestData] = useState(null);
+    const [doorData, setDoorData] = useState(null);
     const [settings, setSettings] = useState({
         showChatBubbles: true,
         showOtherPlayers: true,
         enableMusic: false
     });
     const phaserRef = useRef(null);
+
+    useEffect(() => {
+        const handleOpenChest = (data) => setChestData(data);
+        const handleOpenDoor = (data) => setDoorData(data);
+        
+        EventBus.on('open-chest', handleOpenChest);
+        EventBus.on('open-door', handleOpenDoor);
+        
+        return () => {
+            EventBus.off('open-chest', handleOpenChest);
+            EventBus.off('open-door', handleOpenDoor);
+        };
+    }, []);
 
     useEffect(() => {
         const handleShowMenu = (data) => {
@@ -93,7 +108,7 @@ function App() {
         };
     }, [sendMessage]);
 
-    const isAnyModalOpen = isSettingsOpen || isInventoryOpen;
+    const isAnyModalOpen = isSettingsOpen || isInventoryOpen || chestData || doorData;
 
     useEffect(() => {
         if (isGameReady) {
@@ -111,6 +126,26 @@ function App() {
     const handleAuthSuccess = (userData, userToken) => {
         setUser(userData);
         setToken(userToken);
+    };
+
+    const claimChest = async () => {
+        try {
+            // Actualización local
+            const updatedUser = { ...user };
+            updatedUser.player.gold += 100;
+            setUser(updatedUser);
+            
+            // Persistir
+            await fetch(`${BACKEND_URL}/api/game/player/${user.player.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ gold: updatedUser.player.gold })
+            });
+            
+            setChestData(null);
+        } catch (err) {
+            console.error('Error claiming chest:', err);
+        }
     };
 
     const saveSettings = async (newSettings) => {
@@ -152,6 +187,20 @@ function App() {
                             data={contextMenu}
                             onClose={() => setContextMenu(null)}
                             phaserRef={phaserRef}
+                        />
+                    )}
+
+                    {chestData && (
+                        <ChestModal 
+                            onClaim={claimChest}
+                            onClose={() => setChestData(null)}
+                        />
+                    )}
+
+                    {doorData && (
+                        <DoorModal 
+                            onConfirm={() => { console.log("Saliendo..."); setDoorData(null); }}
+                            onClose={() => setDoorData(null)}
                         />
                     )}
 
@@ -210,6 +259,42 @@ const PlayerContextMenu = ({ data, onClose, phaserRef }) => {
                 <button onClick={() => { console.log("Comerciar", data.playerId); onClose(); }}>Comerciar</button>
                 <button onClick={() => { console.log("Mensaje", data.playerId); onClose(); }}>Mensaje</button>
                 <button onClick={() => { console.log("Amigos", data.playerId); onClose(); }}>Amigos</button>
+            </div>
+        </div>
+    );
+};
+
+const ChestModal = ({ onClaim, onClose }) => {
+    return (
+        <div className="auth-overlay">
+            <div className="auth-card chest-modal">
+                <div className="chest-icon">🎁</div>
+                <h2>¡Cofre Diario Encontrado!</h2>
+                <p>Contiene tesoros acumulados durante el día.</p>
+                <div className="reward-badge">
+                    <span className="amount">+100</span>
+                    <span className="currency">Oro</span>
+                </div>
+                <div className="modal-actions">
+                    <button className="primary-btn claim-btn" onClick={onClaim}>Reclamar Recompensa</button>
+                    <button className="secondary-btn" onClick={onClose}>Quizás luego</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const DoorModal = ({ onConfirm, onClose }) => {
+    return (
+        <div className="auth-overlay">
+            <div className="auth-card chest-modal door-modal">
+                <div className="chest-icon">🚪</div>
+                <h2>¿Salir al Exterior?</h2>
+                <p>Estás a punto de abandonar la taberna y salir al mundo exterior.</p>
+                <div className="modal-actions">
+                    <button className="primary-btn" onClick={onConfirm}>¡Sí, vamos!</button>
+                    <button className="secondary-btn" onClick={onClose}>Mejor me quedo</button>
+                </div>
             </div>
         </div>
     );

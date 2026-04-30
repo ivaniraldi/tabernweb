@@ -15,15 +15,16 @@ export class MainScene extends Phaser.Scene {
 
     preload() {
         // Personaje en 32x32 (Spritesheet de 4x4 frames)
-        this.load.spritesheet('player', 'assets/player.png', { 
-            frameWidth: 32, 
-            frameHeight: 32 
+        this.load.spritesheet('player', 'assets/player.png', {
+            frameWidth: 32,
+            frameHeight: 32
         });
 
         // Tilesets
         this.load.image('tiles', 'assets/tiles.png');
         this.load.image('objects', 'assets/furniture_and_props.png');
-        
+        this.load.image('doors', 'assets/windows_and_doors.png');
+
         // Carga del mapa exportado desde Tiled
         this.load.tilemapTiledJSON('map', 'assets/tilemaps/tilemap.json');
     }
@@ -35,11 +36,12 @@ export class MainScene extends Phaser.Scene {
         // --- CREACIÓN DEL MAPA ---
         this.map = this.make.tilemap({ key: 'map' });
         const map = this.map;
-        
+
         // Vinculamos todos los conjuntos posibles
         const tilesSet = map.addTilesetImage('tiles', 'tiles');
         const objectsSet = map.addTilesetImage('objects', 'objects');
-        const allTilesets = [tilesSet, objectsSet];
+        const doorsSet = map.addTilesetImage('doors', 'doors');
+        const allTilesets = [tilesSet, objectsSet, doorsSet];
 
         this.currentDir = 'down';
 
@@ -75,11 +77,11 @@ export class MainScene extends Phaser.Scene {
 
         // --- CREACIÓN DEL JUGADOR LOCAL ---
         this.me = this.createPlayerSprite(this.playerData.x, this.playerData.y, '#10b981', this.myData.username, true);
-        
+
         // Habilitar física para el contenedor
         this.physics.add.existing(this.me);
         this.me.body.setCollideWorldBounds(true);
-        this.me.body.setSize(20, 20); 
+        this.me.body.setSize(20, 20);
         this.me.body.setOffset(-10, -10);
         this.me.setDepth(10); // Jugador local siempre arriba de otros (Depth 5)
 
@@ -91,7 +93,7 @@ export class MainScene extends Phaser.Scene {
             if (layer) {
                 layer.setDepth(index + 1);
                 layers[layerData.name] = layer;
-                
+
                 // Si es una capa de colisiones (Paredes u Objetos colisionables)
                 if (layerData.name === 'walls' || layerData.name === 'ob_collide') {
                     layer.setCollisionByProperty({ collides: true });
@@ -118,7 +120,7 @@ export class MainScene extends Phaser.Scene {
 
         this.cameras.main.setBounds(0, 0, worldWidth, worldHeight);
         this.physics.world.setBounds(0, 0, worldWidth, worldHeight);
-        
+
         // Seguir al jugador
         this.cameras.main.startFollow(this.me, true, 0.1, 0.1);
 
@@ -132,6 +134,51 @@ export class MainScene extends Phaser.Scene {
             left: Phaser.Input.Keyboard.KeyCodes.A,
             right: Phaser.Input.Keyboard.KeyCodes.D,
             shift: Phaser.Input.Keyboard.KeyCodes.SHIFT
+        });
+
+        // --- SISTEMA DE INTERACTUABLES (Cofres, Puertas, etc) ---
+        this.interactables = [];
+        this.eKey = this.input.keyboard.addKey('E');
+
+        // Escanear todas las capas en busca de objetos interactuables
+        Object.values(layers).forEach(layer => {
+            layer.forEachTile(tile => {
+                if (!tile.properties) return;
+
+                let type = null;
+                if (tile.properties.diary_chest) type = 'chest';
+                if (tile.properties.isDoor) type = 'door';
+
+                if (type) {
+                    const x = tile.getCenterX();
+                    const y = tile.getCenterY();
+
+                    // Ajuste de centrado (el usuario pidió +16 para el cofre)
+                    const finalX = (type === 'chest') ? x + 16 : x - 16;
+
+                    // Crear icono "E" flotante
+                    const eIcon = this.add.container(finalX, y - 40).setDepth(20).setVisible(false);
+                    const eBg = this.add.rectangle(0, 0, 20, 20, 0x000000, 0.6);
+                    const eText = this.add.text(0, 0, 'E', {
+                        fontSize: '12px',
+                        fontWeight: 'bold',
+                        fontFamily: 'Arial',
+                        color: '#ffffff'
+                    }).setOrigin(0.5);
+                    eIcon.add([eBg, eText]);
+
+                    this.tweens.add({
+                        targets: eIcon,
+                        y: y - 45,
+                        duration: 800,
+                        yoyo: true,
+                        repeat: -1,
+                        ease: 'Sine.easeInOut'
+                    });
+
+                    this.interactables.push({ id: tile.index, x: finalX, y, type, icon: eIcon });
+                }
+            });
         });
 
         // Settings state
@@ -156,6 +203,10 @@ export class MainScene extends Phaser.Scene {
                 this.input.keyboard.enabled = false;
                 this.input.keyboard.clearCaptures();
                 this.input.keyboard.resetKeys();
+                // Detener movimiento inmediatamente
+                if (this.me && this.me.body) {
+                    this.me.body.setVelocity(0, 0);
+                }
             } else {
                 this.input.keyboard.enabled = true;
             }
@@ -284,7 +335,7 @@ export class MainScene extends Phaser.Scene {
     resize(gameSize) {
         const { width, height } = gameSize;
         this.cameras.main.setViewport(0, 0, width, height);
-        
+
         const worldWidth = this.map ? this.map.widthInPixels : 512;
         const worldHeight = this.map ? this.map.heightInPixels : 1024;
 
@@ -322,14 +373,14 @@ export class MainScene extends Phaser.Scene {
         if (this.isMobile && this.joystickActive && this.joystickForce) {
             vx = this.joystickForce.x * speed;
             vy = this.joystickForce.y * speed;
-            
+
             // Determinar dirección dominante para la animación
             if (Math.abs(vx) > Math.abs(vy)) {
                 this.currentDir = vx > 0 ? 'right' : 'left';
             } else {
                 this.currentDir = vy > 0 ? 'down' : 'up';
             }
-        } 
+        }
         // --- MOVIMIENTO TECLADO (PC) ---
         else {
             if (this.cursors.left.isDown) {
@@ -358,6 +409,28 @@ export class MainScene extends Phaser.Scene {
             moved = true;
         } else {
             sprite.play(`idle-${this.currentDir}`, true);
+        }
+
+        // --- INTERACCIÓN CON OBJETOS (Cofres, Puertas) ---
+        let nearestObj = null;
+        let minDist = 50;
+
+        this.interactables.forEach(obj => {
+            const dist = Phaser.Math.Distance.Between(this.me.x, this.me.y, obj.x, obj.y);
+            if (dist < minDist) {
+                nearestObj = obj;
+                obj.icon.setVisible(true);
+            } else {
+                obj.icon.setVisible(false);
+            }
+        });
+
+        if (nearestObj && Phaser.Input.Keyboard.JustDown(this.eKey)) {
+            if (nearestObj.type === 'chest') {
+                EventBus.emit('open-chest', nearestObj);
+            } else if (nearestObj.type === 'door') {
+                EventBus.emit('open-door', nearestObj);
+            }
         }
 
         if (moved) {
@@ -415,14 +488,14 @@ export class MainScene extends Phaser.Scene {
         if (!remotePlayer) {
             console.log(`Creando sprite para jugador remoto ${pid} en (${x}, ${y})`);
             remotePlayer = this.createPlayerSprite(x, y, color || '#6366f1', username || `Jugador ${pid}`);
-            remotePlayer.setDepth(5); 
+            remotePlayer.setDepth(5);
             remotePlayer.setVisible(this.settings.showOtherPlayers);
             this.players.set(pid, remotePlayer);
 
             // --- MENU CONTEXTUAL (CLICK DERECHO) ---
             // Aumentamos área de click a 48x48 para que coincida con la escala 1.5x
             remotePlayer.setInteractive(new Phaser.Geom.Rectangle(-24, -24, 48, 48), Phaser.Geom.Rectangle.Contains);
-            
+
             remotePlayer.on('pointerdown', (pointer) => {
                 // Se activa con click derecho O con touch (mobile)
                 if (pointer.rightButtonDown() || pointer.wasTouch) {
@@ -444,7 +517,7 @@ export class MainScene extends Phaser.Scene {
 
             if (dist > 2) {
                 // Estimamos si está corriendo o caminando según la distancia del mensaje
-                const isRunning = dist > 6; 
+                const isRunning = dist > 6;
                 const animType = isRunning ? 'run' : 'walk';
                 let dir = remotePlayer.lastDir || 'down';
 
@@ -453,7 +526,7 @@ export class MainScene extends Phaser.Scene {
                 } else {
                     dir = dy > 0 ? 'down' : 'up';
                 }
-                
+
                 remotePlayer.lastDir = dir;
                 sprite.play(`${animType}-${dir}`, true);
 
@@ -485,10 +558,10 @@ export class MainScene extends Phaser.Scene {
 
         // Usamos el sprite nativo de 32x32
         const sprite = this.add.sprite(0, 0, 'player');
-        
+
         // No aplicamos tinte para mantener colores originales
         // sprite.setTint(tintColor);
-        
+
         // Aumentamos la escala para que se vea mejor frente a los muebles (32x32 -> 48x48 aprox)
         sprite.setScale(1.5);
 
@@ -508,7 +581,7 @@ export class MainScene extends Phaser.Scene {
         this.joystickActive = false;
         this.joystickBase = this.add.circle(0, 0, 40, 0xffffff, 0.1).setScrollFactor(0).setDepth(100).setVisible(false);
         this.joystickThumb = this.add.circle(0, 0, 20, 0xffffff, 0.2).setScrollFactor(0).setDepth(101).setVisible(false);
-        
+
         this.input.on('pointerdown', (pointer) => {
             // Solo activar si es en la mitad inferior de la pantalla y no sobre un objeto interactuable
             if (pointer.y > this.scale.height / 2 && !this.nearbyObject) {
