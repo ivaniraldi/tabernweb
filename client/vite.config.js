@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import babel from '@rolldown/plugin-babel'
 
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
@@ -11,7 +12,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: import.meta.env.VITE_API_URL || 'https://tabernweb-tpq1.onrender.com',
         changeOrigin: true,
       }
     }

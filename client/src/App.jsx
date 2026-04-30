@@ -6,33 +6,57 @@ import { SettingsModal } from './components/SettingsModal';
 import { InventoryModal } from './components/InventoryModal';
 import { useSocket } from './hooks/useSocket';
 import { EventBus } from './game/EventBus';
-import { 
-    Coins, 
-    Gem, 
-    Zap, 
-    Settings, 
-    Package, 
-    MapPin, 
-    ChevronUp, 
-    ChevronDown 
+import {
+    Coins,
+    Gem,
+    Zap,
+    Settings,
+    Package,
+    MapPin,
+    ChevronUp,
+    ChevronDown
 } from 'lucide-react';
 import './App.css';
+
+const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://tabernweb-tpq1.onrender.com';
+const WS_URL = import.meta.env.VITE_WS_URL || 'wss://tabernweb-tpq1.onrender.com';
 
 function App() {
     const [user, setUser] = useState(null);
     const [token, setToken] = useState(null);
-    const { isConnected, sendMessage } = useSocket(user ? `ws://${window.location.hostname}:3000` : null);
+
+    // Conexión dinámica: usa Render por defecto, pero permite localhost para pruebas locales si es necesario
+    const socketUrl = user ? (window.location.hostname === 'localhost' ? `ws://localhost:3000` : WS_URL) : null;
+    const { isConnected, sendMessage } = useSocket(socketUrl);
     const [pos, setPos] = useState({ x: 0, y: 0 });
     const [isGameReady, setIsGameReady] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isInventoryOpen, setIsInventoryOpen] = useState(false);
     const [isHudMinimized, setIsHudMinimized] = useState(false);
+    const [contextMenu, setContextMenu] = useState(null); // { x, y, playerId, username }
     const [settings, setSettings] = useState({
         showChatBubbles: true,
         showOtherPlayers: true,
         enableMusic: false
     });
     const phaserRef = useRef(null);
+
+    useEffect(() => {
+        const handleShowMenu = (data) => {
+            setContextMenu(data);
+        };
+        EventBus.on('show-player-menu', handleShowMenu);
+        return () => EventBus.off('show-player-menu', handleShowMenu);
+    }, []);
+
+    // Close menu on click elsewhere
+    useEffect(() => {
+        const closeMenu = () => setContextMenu(null);
+        if (contextMenu) {
+            window.addEventListener('click', closeMenu);
+            return () => window.removeEventListener('click', closeMenu);
+        }
+    }, [contextMenu]);
 
     useEffect(() => {
         if (user?.player?.settings) {
@@ -91,7 +115,7 @@ function App() {
     const saveSettings = async (newSettings) => {
         setSettings(newSettings);
         try {
-            await fetch(`/api/game/player/${user.player.id}`, {
+            await fetch(`${BACKEND_URL}/api/game/player/${user.player.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ settings: newSettings })
@@ -104,35 +128,43 @@ function App() {
     return (
         <div className="app-container">
             {!user ? (
-                <Auth onAuthSuccess={handleAuthSuccess} />
+                <Auth onAuthSuccess={handleAuthSuccess} backendUrl={BACKEND_URL} />
             ) : (
                 <>
                     <PhaserGame userData={user} ref={phaserRef} />
-                    <HUD 
-                        user={user} 
-                        pos={pos} 
+                    <HUD
+                        user={user}
+                        pos={pos}
                         isMinimized={isHudMinimized}
                         onToggleMinimize={() => setIsHudMinimized(!isHudMinimized)}
-                        onOpenSettings={() => setIsSettingsOpen(true)} 
+                        onOpenSettings={() => setIsSettingsOpen(true)}
                         onOpenInventory={() => setIsInventoryOpen(true)}
                     />
-                    <Chat 
-                        onSendMessage={sendMessage} 
-                        myPlayerId={user.player.id} 
-                        disabled={isAnyModalOpen} 
+                    <Chat
+                        onSendMessage={sendMessage}
+                        myPlayerId={user.player.id}
+                        disabled={isAnyModalOpen}
                     />
+
+                    {contextMenu && (
+                        <PlayerContextMenu 
+                            data={contextMenu} 
+                            onClose={() => setContextMenu(null)} 
+                            phaserRef={phaserRef}
+                        />
+                    )}
                     
                     {isSettingsOpen && (
-                        <SettingsModal 
-                            settings={settings} 
-                            onSave={saveSettings} 
-                            onClose={() => setIsSettingsOpen(false)} 
+                        <SettingsModal
+                            settings={settings}
+                            onSave={saveSettings}
+                            onClose={() => setIsSettingsOpen(false)}
                         />
                     )}
 
                     {isInventoryOpen && (
-                        <InventoryModal 
-                            onClose={() => setIsInventoryOpen(false)} 
+                        <InventoryModal
+                            onClose={() => setIsInventoryOpen(false)}
                         />
                     )}
                 </>
@@ -140,6 +172,47 @@ function App() {
         </div>
     );
 }
+
+const PlayerContextMenu = ({ data, onClose, phaserRef }) => {
+    const [pos, setPos] = useState({ x: data.x, y: data.y });
+
+    useEffect(() => {
+        let frame;
+        const updatePos = () => {
+            if (phaserRef.current) {
+                const scene = phaserRef.current.game.scene.getScene('MainScene');
+                if (scene) {
+                    const screenPos = scene.getPlayerScreenPos(data.playerId);
+                    if (!screenPos || screenPos.outOfBounds) {
+                        onClose();
+                        return;
+                    }
+                    // Ajustamos el menú para que aparezca a la derecha y un poco arriba del centro del jugador
+                    setPos({ x: screenPos.x + 30, y: screenPos.y - 40 });
+                }
+            }
+            frame = requestAnimationFrame(updatePos);
+        };
+        updatePos();
+        return () => cancelAnimationFrame(frame);
+    }, [data.playerId, onClose, phaserRef]);
+
+    return (
+        <div 
+            className="player-context-menu"
+            style={{ left: pos.x, top: pos.y }}
+            onClick={(e) => e.stopPropagation()}
+        >
+            <div className="menu-header">Opciones: {data.username}</div>
+            <div className="menu-options">
+                <button onClick={() => { console.log("Perfil", data.playerId); onClose(); }}>Ver Perfil</button>
+                <button onClick={() => { console.log("Comerciar", data.playerId); onClose(); }}>Comerciar</button>
+                <button onClick={() => { console.log("Mensaje", data.playerId); onClose(); }}>Mensaje</button>
+                <button onClick={() => { console.log("Amigos", data.playerId); onClose(); }}>Amigos</button>
+            </div>
+        </div>
+    );
+};
 
 const HUD = ({ user, pos, isMinimized, onToggleMinimize, onOpenSettings, onOpenInventory }) => (
     <div className="hud">
@@ -162,7 +235,7 @@ const HUD = ({ user, pos, isMinimized, onToggleMinimize, onOpenSettings, onOpenI
                     )}
                 </div>
             </div>
-            
+
             <div className="stats-grid">
                 <div className="stat-box">
                     <div className="stat-label-group">

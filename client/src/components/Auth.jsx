@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export const Auth = ({ onAuthSuccess }) => {
+export const Auth = ({ onAuthSuccess, backendUrl }) => {
     const [isRegister, setIsRegister] = useState(false);
     const [email, setEmail] = useState('');
     const [username, setUsername] = useState('');
@@ -11,7 +11,7 @@ export const Auth = ({ onAuthSuccess }) => {
         e.preventDefault();
         setError('');
         
-        const endpoint = isRegister ? '/api/auth/register' : '/api/auth/login';
+        const endpoint = isRegister ? `${backendUrl}/api/auth/register` : `${backendUrl}/api/auth/login`;
         const body = isRegister 
             ? { email, username, password } 
             : { email, password };

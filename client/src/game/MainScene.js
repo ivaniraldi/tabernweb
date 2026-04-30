@@ -23,13 +23,15 @@ export class MainScene extends Phaser.Scene {
         // Tilesets
         this.load.image('tiles', 'assets/tiles.png');
         this.load.image('objects', 'assets/furniture_and_props.png');
-        this.load.image('windows', 'assets/windows_and_doors.png');
         
         // Carga del mapa exportado desde Tiled
         this.load.tilemapTiledJSON('map', 'assets/tilemaps/tilemap.json');
     }
 
     create() {
+        // Deshabilitar el menú contextual del navegador para usar el nuestro
+        this.input.mouse.disableContextMenu();
+
         // --- CREACIÓN DEL MAPA ---
         this.map = this.make.tilemap({ key: 'map' });
         const map = this.map;
@@ -37,8 +39,7 @@ export class MainScene extends Phaser.Scene {
         // Vinculamos todos los conjuntos posibles
         const tilesSet = map.addTilesetImage('tiles', 'tiles');
         const objectsSet = map.addTilesetImage('objects', 'objects');
-        const windowsSet = map.addTilesetImage('windows', 'windows');
-        const allTilesets = [tilesSet, objectsSet, windowsSet];
+        const allTilesets = [tilesSet, objectsSet];
 
         this.currentDir = 'down';
 
@@ -80,7 +81,7 @@ export class MainScene extends Phaser.Scene {
         this.me.body.setCollideWorldBounds(true);
         this.me.body.setSize(20, 20); 
         this.me.body.setOffset(-10, -10);
-        this.me.setDepth(5); 
+        this.me.setDepth(10); // Jugador local siempre arriba de otros (Depth 5)
 
         // --- CARGA DINÁMICA DE CAPAS DEL MAPA ---
         const layers = {};
@@ -104,7 +105,7 @@ export class MainScene extends Phaser.Scene {
         if (layers['walls']) layers['walls'].setDepth(2);
         if (layers['ob_collide']) layers['ob_collide'].setDepth(3);
         if (layers['ob_no_collide']) layers['ob_no_collide'].setDepth(4);
-        if (this.me) this.me.setDepth(5);
+        // El jugador local mantiene su Depth 10 asignado arriba
 
         // --- CÁMARA Y LÍMITES ---
         const worldWidth = map.widthInPixels; // 512
@@ -159,6 +160,12 @@ export class MainScene extends Phaser.Scene {
                 this.input.keyboard.enabled = true;
             }
         });
+
+        // --- JOYSTICK PARA MÓVILES ---
+        this.isMobile = !this.sys.game.device.os.desktop;
+        if (this.isMobile) {
+            this.setupJoystick();
+        }
 
         // Listen for server messages
         EventBus.on('server_message', (data) => {
@@ -311,31 +318,38 @@ export class MainScene extends Phaser.Scene {
         let vx = 0;
         let vy = 0;
 
+        // --- MOVIMIENTO MÓVIL (JOYSTICK) ---
+        if (this.isMobile && this.joystickActive && this.joystickForce) {
+            vx = this.joystickForce.x * speed;
+            vy = this.joystickForce.y * speed;
+            
+            // Determinar dirección dominante para la animación
+            if (Math.abs(vx) > Math.abs(vy)) {
+                this.currentDir = vx > 0 ? 'right' : 'left';
+            } else {
+                this.currentDir = vy > 0 ? 'down' : 'up';
+            }
+        } 
+        // --- MOVIMIENTO TECLADO (PC) ---
+        else {
+            if (this.cursors.left.isDown) {
+                vx = -speed;
+                this.currentDir = 'left';
+            } else if (this.cursors.right.isDown) {
+                vx = speed;
+                this.currentDir = 'right';
+            }
+
+            if (this.cursors.up.isDown) {
+                vy = -speed;
+                if (vx === 0) this.currentDir = 'up';
+            } else if (this.cursors.down.isDown) {
+                vy = speed;
+                if (vx === 0) this.currentDir = 'down';
+            }
+        }
+
         const sprite = this.me.getAt(0);
-
-        if (this.cursors.left.isDown) {
-            vx = -speed;
-            this.currentDir = 'left';
-        } else if (this.cursors.right.isDown) {
-            vx = speed;
-            this.currentDir = 'right';
-        }
-
-        if (this.cursors.up.isDown) {
-            vy = -speed;
-            if (vx === 0) this.currentDir = 'up';
-        } else if (this.cursors.down.isDown) {
-            vy = speed;
-            if (vx === 0) this.currentDir = 'down';
-        }
-
-        // --- NORMALIZACIÓN DIAGONAL ---
-        // Si nos movemos en ambos ejes, reducimos la velocidad para que la suma vectorial sea igual a 'speed'
-        if (vx !== 0 && vy !== 0) {
-            vx *= Math.SQRT1_2; // 0.7071...
-            vy *= Math.SQRT1_2;
-        }
-
         this.me.body.setVelocity(vx, vy);
 
         // Animación según dirección dominante
@@ -401,7 +415,25 @@ export class MainScene extends Phaser.Scene {
         if (!remotePlayer) {
             console.log(`Creando sprite para jugador remoto ${pid} en (${x}, ${y})`);
             remotePlayer = this.createPlayerSprite(x, y, color || '#6366f1', username || `Jugador ${pid}`);
+            remotePlayer.setDepth(5); 
+            remotePlayer.setVisible(this.settings.showOtherPlayers);
             this.players.set(pid, remotePlayer);
+
+            // --- MENU CONTEXTUAL (CLICK DERECHO) ---
+            // Aumentamos área de click a 48x48 para que coincida con la escala 1.5x
+            remotePlayer.setInteractive(new Phaser.Geom.Rectangle(-24, -24, 48, 48), Phaser.Geom.Rectangle.Contains);
+            
+            remotePlayer.on('pointerdown', (pointer) => {
+                // Se activa con click derecho O con touch (mobile)
+                if (pointer.rightButtonDown() || pointer.wasTouch) {
+                    EventBus.emit('show-player-menu', {
+                        playerId: pid,
+                        username: username || `Jugador ${pid}`,
+                        x: pointer.event.clientX,
+                        y: pointer.event.clientY
+                    });
+                }
+            });
         }
 
         if (x !== undefined && y !== undefined) {
@@ -436,7 +468,7 @@ export class MainScene extends Phaser.Scene {
                         duration: 150,
                         ease: 'Power1',
                         onComplete: () => {
-                            if (sprite && sprite.active && !this.tweens.isNumberTween(remotePlayer)) {
+                            if (sprite && sprite.active && !this.tweens.isTweening(remotePlayer)) {
                                 sprite.play(`idle-${remotePlayer.lastDir || 'down'}`, true);
                             }
                         }
@@ -470,5 +502,66 @@ export class MainScene extends Phaser.Scene {
 
         container.add([sprite, text]);
         return container;
+    }
+
+    setupJoystick() {
+        this.joystickActive = false;
+        this.joystickBase = this.add.circle(0, 0, 40, 0xffffff, 0.1).setScrollFactor(0).setDepth(100).setVisible(false);
+        this.joystickThumb = this.add.circle(0, 0, 20, 0xffffff, 0.2).setScrollFactor(0).setDepth(101).setVisible(false);
+        
+        this.input.on('pointerdown', (pointer) => {
+            // Solo activar si es en la mitad inferior de la pantalla y no sobre un objeto interactuable
+            if (pointer.y > this.scale.height / 2 && !this.nearbyObject) {
+                this.joystickActive = true;
+                this.joystickBase.setPosition(pointer.x, pointer.y).setVisible(true);
+                this.joystickThumb.setPosition(pointer.x, pointer.y).setVisible(true);
+                this.joystickPointer = pointer;
+            }
+        });
+
+        this.input.on('pointermove', (pointer) => {
+            if (this.joystickActive && this.joystickPointer === pointer) {
+                const dist = Phaser.Math.Distance.Between(this.joystickBase.x, this.joystickBase.y, pointer.x, pointer.y);
+                const angle = Phaser.Math.Angle.Between(this.joystickBase.x, this.joystickBase.y, pointer.x, pointer.y);
+                const maxDist = 40;
+
+                const finalDist = Math.min(dist, maxDist);
+                this.joystickThumb.x = this.joystickBase.x + Math.cos(angle) * finalDist;
+                this.joystickThumb.y = this.joystickBase.y + Math.sin(angle) * finalDist;
+
+                // Calcular velocidad normalizada para el update
+                this.joystickForce = {
+                    x: (this.joystickThumb.x - this.joystickBase.x) / maxDist,
+                    y: (this.joystickThumb.y - this.joystickBase.y) / maxDist
+                };
+            }
+        });
+
+        this.input.on('pointerup', () => {
+            this.joystickActive = false;
+            this.joystickBase.setVisible(false);
+            this.joystickThumb.setVisible(false);
+            this.joystickForce = { x: 0, y: 0 };
+        });
+    }
+
+    getPlayerScreenPos(id) {
+        const pid = Number(id);
+        const myId = Number(this.playerData.id);
+        const target = pid === myId ? this.me : this.players.get(pid);
+
+        if (!target || !target.active) return null;
+
+        // Convertir posición del mundo a pantalla
+        const cam = this.cameras.main;
+        const screenX = (target.x - cam.scrollX) * cam.zoom;
+        const screenY = (target.y - cam.scrollY) * cam.zoom;
+
+        // Verificar si está fuera de los bordes (con un pequeño margen de 50px)
+        if (screenX < -50 || screenX > cam.width + 50 || screenY < -50 || screenY > cam.height + 50) {
+            return { outOfBounds: true };
+        }
+
+        return { x: screenX, y: screenY };
     }
 }
