@@ -1,0 +1,39 @@
+{
+    "activeFile": "",
+    "expandedProjectPaths": [
+    ],
+    "fileStates": {
+        "": {
+            "scaleInDock": 0.75,
+            "scaleInEditor": 0.125
+        },
+        "#aaa": {
+            "scaleInDock": 1
+        },
+        "#tiles": {
+            "scaleInDock": 1
+        },
+        "#tileset": {
+            "scaleInDock": 0.5,
+            "scaleInEditor": 0.75
+        }
+    },
+    "last.exportedFilePath": "C:/Users/Ivan/Desktop/testws/client/public/assets/tilemaps",
+    "last.imagePath": "C:/Users/Ivan/Desktop/testws/client/public/assets",
+    "map.height": 32,
+    "map.lastUsedExportFilter": "Todos los archivos (*)",
+    "map.tileHeight": 32,
+    "map.tileWidth": 32,
+    "map.width": 24,
+    "openFiles": [
+    ],
+    "project": "tilemap.tiled-project",
+    "property.type": "bool",
+    "recentFiles": [
+    ],
+    "tileset.embedInMap": true,
+    "tileset.tileSize": {
+        "height": 32,
+        "width": 32
+    }
+}

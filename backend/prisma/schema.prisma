@@ -1,0 +1,45 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+model User {
+  id            Int      @id @default(autoincrement())
+  email         String   @unique
+  username      String   @unique
+  passwordHash  String
+  createdAt     DateTime @default(now())
+  player        Player?
+}
+
+model Player {
+  id          Int       @id @default(autoincrement())
+  userId      Int       @unique
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  x           Float     @default(0.0)
+  y           Float     @default(0.0)
+  experience  Int       @default(0)
+  gold        Int       @default(0)
+  diamonds    Int       @default(0)
+  inventory   Json      @default("{}")
+  settings    Json      @default("{\"showChatBubbles\": true, \"showOtherPlayers\": true, \"enableMusic\": false}")
+  color       String    @default("#6366f1")
+  lastOnline  DateTime  @default(now())
+  messages    Message[]
+}
+
+model Message {
+  id        Int      @id @default(autoincrement())
+  playerId  Int
+  player    Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  content   String
+  createdAt DateTime @default(now())
+}
