@@ -12,7 +12,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: import.meta.env.VITE_API_URL || 'https://tabernweb-tpq1.onrender.com',
+        target: 'http://localhost:3000',
         changeOrigin: true,
       }
     }

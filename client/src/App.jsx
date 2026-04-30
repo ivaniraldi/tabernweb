@@ -18,15 +18,16 @@ import {
 } from 'lucide-react';
 import './App.css';
 
-const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://tabernweb-tpq1.onrender.com';
-const WS_URL = import.meta.env.VITE_WS_URL || 'wss://tabernweb-tpq1.onrender.com';
+const IS_DEV = import.meta.env.DEV;
+const BACKEND_URL = IS_DEV ? 'http://localhost:3000' : 'https://tabernweb-tpq1.onrender.com';
+const WS_URL = IS_DEV ? 'ws://localhost:3000' : 'wss://tabernweb-tpq1.onrender.com';
 
 function App() {
     const [user, setUser] = useState(null);
     const [token, setToken] = useState(null);
 
-    // Conexión dinámica: usa Render por defecto, pero permite localhost para pruebas locales si es necesario
-    const socketUrl = user ? (window.location.hostname === 'localhost' ? `ws://localhost:3000` : WS_URL) : null;
+    // Conexión dinámica: usa WS_URL definido arriba según el entorno (Dev/Prod)
+    const socketUrl = user ? WS_URL : null;
     const { isConnected, sendMessage } = useSocket(socketUrl);
     const [pos, setPos] = useState({ x: 0, y: 0 });
     const [isGameReady, setIsGameReady] = useState(false);
@@ -147,13 +148,13 @@ function App() {
                     />
 
                     {contextMenu && (
-                        <PlayerContextMenu 
-                            data={contextMenu} 
-                            onClose={() => setContextMenu(null)} 
+                        <PlayerContextMenu
+                            data={contextMenu}
+                            onClose={() => setContextMenu(null)}
                             phaserRef={phaserRef}
                         />
                     )}
-                    
+
                     {isSettingsOpen && (
                         <SettingsModal
                             settings={settings}
@@ -198,7 +199,7 @@ const PlayerContextMenu = ({ data, onClose, phaserRef }) => {
     }, [data.playerId, onClose, phaserRef]);
 
     return (
-        <div 
+        <div
             className="player-context-menu"
             style={{ left: pos.x, top: pos.y }}
             onClick={(e) => e.stopPropagation()}
