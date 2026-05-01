@@ -22,7 +22,22 @@ export const PhaserGame = forwardRef(function PhaserGame({ userData }, ref) {
                 },
                 physics: {
                     default: 'arcade',
-                    arcade: { debug: false }
+                    arcade: { 
+                        debug: true,
+                        fixedStep: true 
+                    }
+                },
+                pixelArt: true,
+                antialias: false,
+                render: {
+                    roundPixels: true,
+                    powerPreference: 'high-performance'
+                },
+                fps: {
+                    target: 60,
+                    forceSetTimeOut: false,
+                    panicMax: 0,
+                    smoothStep: true
                 },
                 scene: [MainScene]
             };

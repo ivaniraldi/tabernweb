@@ -10,30 +10,80 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-
 model User {
-  id            Int      @id @default(autoincrement())
-  email         String   @unique
-  username      String   @unique
-  passwordHash  String
-  createdAt     DateTime @default(now())
-  player        Player?
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  username     String   @unique
+  passwordHash String
+  role         String   @default("user") // "user", "admin", "dev"
+  createdAt    DateTime @default(now())
+  player       Player?
+  friends      Friendship[] @relation("UserFriends")
+  friendOf     Friendship[] @relation("FriendToUser")
+}
+
+model Friendship {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  friendId  Int
+  status    String   @default("PENDING") // "PENDING", "ACCEPTED"
+  createdAt DateTime @default(now())
+
+  user      User     @relation("UserFriends", fields: [userId], references: [id], onDelete: Cascade)
+  friend    User     @relation("FriendToUser", fields: [friendId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, friendId])
 }
 
 model Player {
-  id          Int       @id @default(autoincrement())
-  userId      Int       @unique
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  x           Float     @default(0.0)
-  y           Float     @default(0.0)
-  experience  Int       @default(0)
-  gold        Int       @default(0)
-  diamonds    Int       @default(0)
-  inventory   Json      @default("{}")
-  settings    Json      @default("{\"showChatBubbles\": true, \"showOtherPlayers\": true, \"enableMusic\": false}")
-  color       String    @default("#6366f1")
-  lastOnline  DateTime  @default(now())
-  messages    Message[]
+  id             Int             @id @default(autoincrement())
+  userId         Int             @unique
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  x              Float           @default(0.0)
+  y              Float           @default(0.0)
+  mapId          String          @default("map1")
+  experience     Int             @default(0)
+  gold           Int             @default(0)
+  diamonds       Int             @default(0)
+  statPoints     Int             @default(5)
+  stats          Json            @default("{\"hp\": 100, \"maxHp\": 100, \"mp\": 100, \"maxMp\": 100, \"str\": 1, \"dex\": 1, \"int\": 1, \"vit\": 1, \"luk\": 1, \"atk\": 1, \"def\": 1, \"spd\": 1, \"armor\": 0}")
+  inventoryItems InventoryItem[]
+  settings       Json            @default("{\"showChatBubbles\": true, \"showOtherPlayers\": true, \"enableMusic\": false, \"zoom\": 0, \"showHitboxes\": false}")
+  color          String          @default("#6366f1")
+  lastOnline     DateTime        @default(now())
+  equipment      Json            @default("{}")
+  messages       Message[]
+}
+
+model Item {
+  id             Int             @id @default(autoincrement())
+  name           String          @unique
+  description    String?
+  type           String          @default("OTHER")
+  rarity         String          @default("COMMON")
+  buyPrice       Int             @default(0)
+  sellPrice      Int             @default(0)
+  stackable      Boolean         @default(true)
+  icon           String?
+  sprite_url     String?
+  slot           String?
+  stats          Json?
+  levelRequired  Int             @default(1)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  inventoryItems InventoryItem[]
+}
+
+model InventoryItem {
+  id         Int     @id @default(autoincrement())
+  playerId   Int
+  itemId     Int
+  quantity   Int     @default(1)
+  isEquipped Boolean @default(false)
+  player     Player  @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  item       Item    @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, itemId])
 }
 
 model Message {

@@ -21,7 +21,6 @@ const register = async (req, res) => {
                     create: {
                         x: Math.random() * 200 + 400,
                         y: Math.random() * 200 + 400,
-                        inventory: {},
                         color: `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`
                     }
                 }
@@ -31,7 +30,15 @@ const register = async (req, res) => {
             }
         });
 
-        res.status(201).json({ message: "User registered successfully", user: { id: user.id, username: user.username, email: user.email } });
+        res.status(201).json({ 
+            message: "User registered successfully", 
+            user: { 
+                id: user.id, 
+                username: user.username, 
+                email: user.email,
+                role: user.role
+            } 
+        });
     } catch (error) {
         console.error(error);
         if (error.code === "P2002") {
@@ -48,7 +55,17 @@ const login = async (req, res) => {
 
         const user = await prisma.user.findUnique({
             where: { email },
-            include: { player: true }
+            include: { 
+                player: {
+                    include: {
+                        inventoryItems: {
+                            include: {
+                                item: true
+                            }
+                        }
+                    }
+                }
+            }
         });
 
         if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
@@ -59,7 +76,15 @@ const login = async (req, res) => {
             expiresIn: "24h"
         });
 
-        res.json({ token, user: { id: user.id, username: user.username, player: user.player } });
+        res.json({ 
+            token, 
+            user: { 
+                id: user.id, 
+                username: user.username, 
+                role: user.role,
+                player: user.player 
+            } 
+        });
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: "Internal server error" });

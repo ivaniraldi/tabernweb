@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { EventBus } from '../game/EventBus';
-import { MessageSquare, X, Send } from 'lucide-react';
+import { MessageSquare, X, Send, Lock } from 'lucide-react';
 
-export const Chat = ({ onSendMessage, myPlayerId, disabled }) => {
+export const Chat = ({ onSendMessage, myPlayerId, disabled, isVisible, onToggle }) => {
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
-    const [isVisible, setIsVisible] = useState(true);
     const messagesEndRef = useRef(null);
 
     useEffect(() => {
@@ -13,11 +12,44 @@ export const Chat = ({ onSendMessage, myPlayerId, disabled }) => {
             if (data.type === 'chat') {
                 setMessages(prev => [...prev, data]);
             }
+            if (data.type === 'private_message') {
+                setMessages(prev => [...prev, {
+                    ...data,
+                    isPrivate: true,
+                    type: 'chat',
+                    username: `(De ${data.fromUsername})`,
+                    color: '#f472b6' // Rosa para privados
+                }]);
+            }
+            if (data.type === 'private_message_sent') {
+                setMessages(prev => [...prev, {
+                    ...data,
+                    isPrivate: true,
+                    type: 'chat',
+                    username: `(Para ${data.toUsername})`,
+                    color: '#f472b6'
+                }]);
+            }
+        };
+
+        const handlePrefill = (text) => {
+            onToggle(true);
+            setInput(text);
+            // Wait for render to focus
+            setTimeout(() => {
+                const el = document.getElementById('chat-input');
+                if (el) el.focus();
+            }, 50);
         };
 
         EventBus.on('server_message', handleServerMessage);
-        return () => EventBus.off('server_message', handleServerMessage);
-    }, []);
+        EventBus.on('chat-prefill', handlePrefill);
+        
+        return () => {
+            EventBus.off('server_message', handleServerMessage);
+            EventBus.off('chat-prefill', handlePrefill);
+        };
+    }, [onToggle]);
 
     useEffect(() => {
         const handleKeyDown = (e) => {
@@ -41,13 +73,25 @@ export const Chat = ({ onSendMessage, myPlayerId, disabled }) => {
 
     const toggleChat = (show) => {
         if (disabled && show) return;
-        setIsVisible(show);
+        onToggle(show);
         EventBus.emit('chat-focus', show);
     };
 
     const handleSubmit = (e) => {
         e.preventDefault();
         if (!input.trim()) return;
+
+        // Command parsing: /msg {username} {message}
+        if (input.startsWith('/msg ')) {
+            const parts = input.split(' ');
+            if (parts.length >= 3) {
+                const toUsername = parts[1];
+                const message = parts.slice(2).join(' ');
+                onSendMessage({ type: 'private_message', toUsername, message });
+                setInput('');
+                return;
+            }
+        }
 
         onSendMessage({ type: 'chat', message: input });
         setInput('');
@@ -69,7 +113,7 @@ export const Chat = ({ onSendMessage, myPlayerId, disabled }) => {
                 <div className="chat-header">
                     <div className="header-info">
                         <MessageSquare size={16} />
-                        <span>Chat Global</span>
+                        <span>Chat {input.startsWith('/msg ') ? 'Privado' : 'Global'}</span>
                     </div>
                     <button className="close-chat-btn" onClick={() => toggleChat(false)}>
                         <X size={18} />
@@ -78,8 +122,9 @@ export const Chat = ({ onSendMessage, myPlayerId, disabled }) => {
 
                 <div className="messages-log">
                     {messages.map((msg, i) => (
-                        <div key={i} className="chat-line">
-                            <span className="sender" style={{ color: msg.playerId === myPlayerId ? '#fbbf24' : '#818cf8' }}>
+                        <div key={i} className={`chat-line ${msg.isPrivate ? 'private' : ''}`}>
+                            {msg.isPrivate && <Lock size={10} className="inline mr-1 text-pink-400" />}
+                            <span className="sender" style={{ color: msg.color || (msg.playerId === myPlayerId ? '#fbbf24' : '#818cf8') }}>
                                 {msg.username || `Jugador ${msg.playerId}`}:
                             </span>
                             <span className="text">{msg.message}</span>
@@ -94,7 +139,7 @@ export const Chat = ({ onSendMessage, myPlayerId, disabled }) => {
                         type="text"
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
-                        placeholder="Escribe un mensaje..."
+                        placeholder="Escribe /msg {nombre} para privado..."
                         autoComplete="off"
                         onFocus={() => EventBus.emit('chat-focus', true)}
                         onBlur={() => EventBus.emit('chat-focus', false)}
@@ -104,7 +149,14 @@ export const Chat = ({ onSendMessage, myPlayerId, disabled }) => {
                     </button>
                 </form>
             </div>
+
+            <style>{`
+                .chat-line.private {
+                    background: rgba(244, 114, 182, 0.05);
+                    border-radius: 4px;
+                    padding-left: 4px;
+                }
+            `}</style>
         </>
     );
 };
-

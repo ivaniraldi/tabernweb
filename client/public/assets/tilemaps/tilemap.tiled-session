@@ -5,7 +5,7 @@
     "fileStates": {
         "": {
             "scaleInDock": 1,
-            "scaleInEditor": 1.5
+            "scaleInEditor": 1
         },
         "#aaa": {
             "scaleInDock": 1
@@ -16,30 +16,72 @@
         "#tiles": {
             "scaleInDock": 1
         },
+        "#tiles_outside": {
+            "scaleInDock": 0.5
+        },
         "#tileset": {
             "scaleInDock": 0.5,
             "scaleInEditor": 0.75
         },
+        "2map_project.tmx": {
+            "scale": 1,
+            "selectedLayer": 0,
+            "viewCenter": {
+                "x": 316,
+                "y": 244
+            }
+        },
+        "2map_project.tmx#tiles_outside": {
+            "scaleInDock": 0.5
+        },
+        "C:/Users/Ivan/Downloads/EPIC RPG World Pack-[FREE Demo]Grass Land 2.0/EPIC RPG World Pack - [FREE Demo]Grass Land 2.0-REWORK/TiledMap Editor/Tilesets/Tilesets and props Demo.tsx": {
+            "scaleInDock": 1
+        },
+        "C:/Users/Ivan/Downloads/EPIC RPG World Pack-[FREE Demo]Grass Land 2.0/EPIC RPG World Pack - [FREE Demo]Grass Land 2.0-REWORK/TiledMap Editor/sample map demo.tmx": {
+            "scale": 0.5046875,
+            "selectedLayer": 0,
+            "viewCenter": {
+                "x": 479.5046439628484,
+                "y": 319.00928792569664
+            }
+        },
         "tiled_project.tmx": {
-            "scale": 1.5,
+            "scale": 1,
             "selectedLayer": 2,
             "viewCenter": {
-                "x": 174,
-                "y": 164
+                "x": 354,
+                "y": 136
             }
         },
         "tiled_project.tmx#doors": {
-            "scaleInDock": 1
+            "scaleInDock": 0.75
         },
         "tiled_project.tmx#objects": {
             "scaleInDock": 0.75
         },
         "tiled_project.tmx#tiles": {
-            "scaleInDock": 0.33
+            "scaleInDock": 0.75
+        },
+        "tilemap.json": {
+            "scale": 0.5380859375,
+            "selectedLayer": 0,
+            "viewCenter": {
+                "x": 384.69691470054454,
+                "y": 511.07078039927404
+            }
+        },
+        "tilemap.json#doors": {
+            "scaleInDock": 1
+        },
+        "tilemap.json#objects": {
+            "scaleInDock": 1
+        },
+        "tilemap.json#tiles": {
+            "scaleInDock": 1
         }
     },
     "last.exportedFilePath": "C:/Users/Ivan/Desktop/testws/client/public/assets/tilemaps",
-    "last.imagePath": "C:/Users/Ivan/Desktop/testws/client/public/assets/animations",
+    "last.imagePath": "C:/Users/Ivan/Desktop/testws/client/public/assets",
     "map.height": 32,
     "map.lastUsedExportFilter": "Todos los archivos (*)",
     "map.lastUsedFormat": "tmx",
@@ -52,6 +94,9 @@
     "project": "tilemap.tiled-project",
     "property.type": "bool",
     "recentFiles": [
+        "tilemap.json",
+        "2map_project.tmx",
+        "C:/Users/Ivan/Downloads/EPIC RPG World Pack-[FREE Demo]Grass Land 2.0/EPIC RPG World Pack - [FREE Demo]Grass Land 2.0-REWORK/TiledMap Editor/sample map demo.tmx",
         "tiled_project.tmx"
     ],
     "tileset.embedInMap": true,

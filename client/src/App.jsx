@@ -1,41 +1,58 @@
 import { useState, useEffect, useRef } from 'react';
+import { Home } from 'lucide-react';
 import { Auth } from './components/Auth';
 import { PhaserGame } from './components/PhaserGame';
 import { Chat } from './components/Chat';
 import { SettingsModal } from './components/SettingsModal';
 import { InventoryModal } from './components/InventoryModal';
+import { ShopModal } from './components/ShopModal';
+import { LoadingScreen } from './components/LoadingScreen';
+import { ProfileModal } from './components/ProfileModal';
 import { useSocket } from './hooks/useSocket';
 import { EventBus } from './game/EventBus';
-import {
-    Coins,
-    Gem,
-    Zap,
-    Settings,
-    Package,
-    MapPin,
-    ChevronUp,
-    ChevronDown
-} from 'lucide-react';
+import { HUD } from './components/HUD';
+import { PlayerContextMenu } from './components/PlayerContextMenu';
+import { ChestModal } from './components/ChestModal';
+import { DoorModal } from './components/DoorModal';
+import { TradeModal } from './components/TradeModal';
+import { SocialModal } from './components/SocialModal';
+import { showAlert, showConfirm, closeAllModals } from './lib/swalConfig';
+
+
 import './App.css';
+
 
 const IS_DEV = import.meta.env.DEV;
 const BACKEND_URL = IS_DEV ? 'http://localhost:3000' : 'https://tabernweb-tpq1.onrender.com';
 const WS_URL = IS_DEV ? 'ws://localhost:3000' : 'wss://tabernweb-tpq1.onrender.com';
 
+const MAP_SPAWNS = {
+    'map1': { x: 100, y: 150 },
+    'map2': { x: 250, y: 150 }
+};
+
 function App() {
     const [user, setUser] = useState(null);
     const [token, setToken] = useState(null);
 
-    // Conexión dinámica: usa WS_URL definido arriba según el entorno (Dev/Prod)
     const socketUrl = user ? WS_URL : null;
     const { isConnected, sendMessage } = useSocket(socketUrl);
     const [pos, setPos] = useState({ x: 0, y: 0 });
     const [isGameReady, setIsGameReady] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isInventoryOpen, setIsInventoryOpen] = useState(false);
-    const [isHudMinimized, setIsHudMinimized] = useState(false);
-    const [contextMenu, setContextMenu] = useState(null); // { x, y, playerId, username }
+    const [isShopOpen, setIsShopOpen] = useState(false);
+    const [profileTargetId, setProfileTargetId] = useState(null);
+    const [isSocialOpen, setIsSocialOpen] = useState(false);
+    const [friends, setFriends] = useState([]);
+    const [requests, setRequests] = useState({ incoming: [], outgoing: [] });
+    const [isHudMinimized, setIsHudMinimized] = useState(true);
+    const [contextMenu, setContextMenu] = useState(null); 
+    const [isTradeOpen, setIsTradeOpen] = useState(false);
+    const [tradeData, setTradeData] = useState(null); // { otherId, otherPlayerName, otherOffers: { gold, items, confirmed }, meConfirmed, myOffer: { gold, items } }
     const [chestData, setChestData] = useState(null);
+
+
     const [doorData, setDoorData] = useState(null);
     const [settings, setSettings] = useState({
         showChatBubbles: true,
@@ -44,16 +61,187 @@ function App() {
     });
     const phaserRef = useRef(null);
 
+    // Estado de carga
+    const [loadingStatus, setLoadingStatus] = useState('Iniciando');
+    const [currentMapId, setCurrentMapId] = useState('map1');
+    const [isChatVisible, setIsChatVisible] = useState(false);
+    const [minLoadingDone, setMinLoadingDone] = useState(false);
+
+    useEffect(() => {
+        if (user) {
+            const timer = setTimeout(() => {
+                setMinLoadingDone(true);
+            }, 3000);
+            return () => clearTimeout(timer);
+        } else {
+            setMinLoadingDone(false);
+        }
+    }, [user]);
+
+    const fetchSocialData = async () => {
+        if (!user) return;
+        try {
+            const friendsRes = await fetch(`${BACKEND_URL}/api/social/friends/${user.id}`);
+            if (friendsRes.ok) setFriends(await friendsRes.json());
+            
+            const requestsRes = await fetch(`${BACKEND_URL}/api/social/requests/${user.id}`);
+            if (requestsRes.ok) setRequests(await requestsRes.json());
+        } catch (err) {
+            console.error("Error fetching social data:", err);
+        }
+    };
+
+    useEffect(() => {
+        if (user?.player?.mapId) {
+            setCurrentMapId(user.player.mapId);
+        }
+        if (user) {
+            fetchSocialData();
+            const interval = setInterval(fetchSocialData, 10000); // Polling cada 10s
+            return () => clearInterval(interval);
+        }
+    }, [user]);
+
+    useEffect(() => {
+        const handleServerMessage = (data) => {
+            if (data.type === 'trade_request') {
+                showConfirm(
+                    'Petición de Comercio',
+                    `${data.senderName} quiere comerciar contigo.`,
+                    () => {
+                        sendMessage({ type: 'trade_response', senderId: data.senderId, accepted: true });
+                    },
+                    () => {
+                        sendMessage({ type: 'trade_response', senderId: data.senderId, accepted: false });
+                    }
+                );
+            }
+
+            if (data.type === 'trade_start') {
+                closeAllModals();
+                setIsTradeOpen(true);
+                const otherId = data.participants.find(id => id !== user.id);
+                setTradeData({ 
+                    otherId, 
+                    otherPlayerName: 'Jugador',
+                    otherOffers: { gold: 0, items: [], locked: false, confirmed: false },
+                    myOffer: { gold: 0, items: [] },
+                    meLocked: false,
+                    meConfirmed: false,
+                    chatMessages: []
+                });
+            }
+
+            if (data.type === 'trade_updated') {
+                setTradeData(prev => ({
+                    ...prev,
+                    otherOffers: { 
+                        ...prev.otherOffers, 
+                        gold: data.offers[prev.otherId].gold, 
+                        items: data.offers[prev.otherId].items, 
+                        locked: false,
+                        confirmed: false 
+                    },
+                    meLocked: false,
+                    meConfirmed: false
+                }));
+            }
+
+            if (data.type === 'trade_locked') {
+                setTradeData(prev => ({
+                    ...prev,
+                    otherOffers: { ...prev.otherOffers, locked: data.offers[prev.otherId].locked },
+                    meLocked: data.offers[user.id].locked
+                }));
+            }
+
+            if (data.type === 'trade_confirmed') {
+                setTradeData(prev => ({
+                    ...prev,
+                    otherOffers: { ...prev.otherOffers, confirmed: data.offers[prev.otherId].confirmed },
+                    meConfirmed: data.offers[user.id].confirmed
+                }));
+            }
+
+            if (data.type === 'trade_complete') {
+                setUser({ ...user, player: data.player });
+                setIsTradeOpen(false);
+                setTradeData(null);
+                showAlert("Trato Hecho", "El intercambio se ha realizado con éxito.", 'success');
+            }
+
+            if (data.type === 'trade_cancelled') {
+                setIsTradeOpen(false);
+                setTradeData(null);
+                showAlert("Comercio Cancelado", "El otro jugador ha cancelado el trato.");
+            }
+
+            if (data.type === 'trade_rejected') {
+                closeAllModals();
+                showAlert("Comercio Rechazado", `${data.targetName} ha rechazado tu oferta.`);
+            }
+
+            if (data.type === 'trade_error') {
+                showAlert("Error en Comercio", data.message, 'error');
+            }
+
+            if (data.type === 'trade_chat') {
+                setTradeData(prev => ({
+                    ...prev,
+                    chatMessages: [...prev.chatMessages, { sender: 'other', text: data.message }]
+                }));
+            }
+
+            if (data.type === 'equipment_updated') {
+                setUser(prev => ({
+                    ...prev,
+                    player: {
+                        ...prev.player,
+                        equipment: data.equipment
+                    }
+                }));
+            }
+
+            if (data.type === 'item_used') {
+                setUser(prev => ({ ...prev, player: data.player }));
+                showAlert("Objeto Usado", data.message, "success");
+            }
+        };
+
+        EventBus.on('server_message', handleServerMessage);
+        return () => EventBus.off('server_message', handleServerMessage);
+    }, [user, sendMessage]);
+
+    useEffect(() => {
+        const handleMapChanged = ({ mapId, pos }) => {
+            setCurrentMapId(mapId);
+            setPos(pos); // Update HUD position immediately
+            if (isConnected) {
+                sendMessage({ 
+                    type: 'change_map', 
+                    mapId: mapId,
+                    x: pos.x,
+                    y: pos.y
+                });
+            }
+        };
+        EventBus.on('map-changed', handleMapChanged);
+        return () => EventBus.off('map-changed', handleMapChanged);
+    }, [isConnected, sendMessage]);
+
     useEffect(() => {
         const handleOpenChest = (data) => setChestData(data);
         const handleOpenDoor = (data) => setDoorData(data);
+        const handleOpenShop = () => setIsShopOpen(true);
         
         EventBus.on('open-chest', handleOpenChest);
         EventBus.on('open-door', handleOpenDoor);
+        EventBus.on('open-shop', handleOpenShop);
         
         return () => {
             EventBus.off('open-chest', handleOpenChest);
             EventBus.off('open-door', handleOpenDoor);
+            EventBus.off('open-shop', handleOpenShop);
         };
     }, []);
 
@@ -65,7 +253,6 @@ function App() {
         return () => EventBus.off('show-player-menu', handleShowMenu);
     }, []);
 
-    // Close menu on click elsewhere
     useEffect(() => {
         const closeMenu = () => setContextMenu(null);
         if (contextMenu) {
@@ -83,16 +270,30 @@ function App() {
     useEffect(() => {
         const handleGameReady = () => {
             setIsGameReady(true);
+            setLoadingStatus('Estableciendo conexión');
         };
         EventBus.on('current-scene-ready', handleGameReady);
         return () => EventBus.off('current-scene-ready', handleGameReady);
     }, []);
 
     useEffect(() => {
-        if (isConnected && user && isGameReady) {
-            console.log('Sending login to server...');
-            sendMessage({ type: 'login', playerId: user.player.id });
+        if (user && !isGameReady) {
+            setLoadingStatus('Cargando recursos del mapa');
+        }
+    }, [user, isGameReady]);
+
+    const hasLoggedIn = useRef(false);
+
+    useEffect(() => {
+        if (isConnected && user && isGameReady && !hasLoggedIn.current) {
+            setLoadingStatus('Finalizando');
+            sendMessage({ 
+                type: 'login', 
+                playerId: user.player.id,
+                mapId: user.player.mapId || currentMapId 
+            });
             setPos({ x: user.player.x, y: user.player.y });
+            hasLoggedIn.current = true;
         }
     }, [isConnected, user, isGameReady]);
 
@@ -108,15 +309,15 @@ function App() {
         };
     }, [sendMessage]);
 
-    const isAnyModalOpen = isSettingsOpen || isInventoryOpen || chestData || doorData;
+    const isAnyModalOpen = isSettingsOpen || isInventoryOpen || isShopOpen || profileTargetId || isSocialOpen || chestData || doorData;
+    const showLoading = user && (!isConnected || !isGameReady || !minLoadingDone);
 
     useEffect(() => {
         if (isGameReady) {
-            EventBus.emit('chat-focus', isAnyModalOpen);
+            EventBus.emit('chat-focus', isAnyModalOpen || showLoading);
         }
-    }, [isAnyModalOpen, isGameReady]);
+    }, [isAnyModalOpen, showLoading, isGameReady]);
 
-    // Send settings updates to Phaser and Backend
     useEffect(() => {
         if (isGameReady) {
             EventBus.emit('settings-changed', settings);
@@ -130,12 +331,10 @@ function App() {
 
     const claimChest = async () => {
         try {
-            // Actualización local
             const updatedUser = { ...user };
             updatedUser.player.gold += 100;
             setUser(updatedUser);
             
-            // Persistir
             await fetch(`${BACKEND_URL}/api/game/player/${user.player.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -146,6 +345,170 @@ function App() {
         } catch (err) {
             console.error('Error claiming chest:', err);
         }
+    };
+
+    const handleBuyItems = async (cartItems) => {
+        try {
+            const res = await fetch(`${BACKEND_URL}/api/game/buy`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ playerId: user.player.id, items: cartItems })
+            });
+            
+            const data = await res.json();
+            if (res.ok) {
+                setUser({ ...user, player: data.player });
+            } else {
+                showAlert("Error de Compra", data.error || "Error al comprar", 'error');
+            }
+        } catch (err) {
+            console.error("Error buying item:", err);
+        }
+    };
+
+    const handleSellItems = async (cartItems) => {
+        try {
+            const res = await fetch(`${BACKEND_URL}/api/game/sell`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ playerId: user.player.id, items: cartItems })
+            });
+            
+            const data = await res.json();
+            if (res.ok) {
+                setUser({ ...user, player: data.player });
+            } else {
+                showAlert("Error de Venta", data.error || "Error al vender", 'error');
+            }
+        } catch (err) {
+            console.error("Error selling item:", err);
+        }
+    };
+
+    const handleEquip = (inventoryItemId) => {
+        sendMessage({ type: 'equip_item', inventoryItemId });
+    };
+
+    const handleUnequip = (slot) => {
+        sendMessage({ type: 'unequip_item', slot });
+    };
+
+    const handleUseItem = (inventoryItemId) => {
+        const invItem = user.player.inventoryItems.find(i => i.id === inventoryItemId);
+        const itemName = invItem ? invItem.item.name : "este objeto";
+
+        showConfirm(
+            "Usar Objeto",
+            `¿Estás seguro de que quieres usar ${itemName}?`,
+            () => {
+                sendMessage({ type: 'use_item', inventoryItemId });
+            }
+        );
+    };
+
+    const handleUpgradeStat = async (statName) => {
+        try {
+            const res = await fetch(`${BACKEND_URL}/api/game/upgrade-stat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ playerId: user.player.id, statName })
+            });
+            
+            const data = await res.json();
+            if (res.ok) {
+                setUser({ ...user, player: data.player });
+            } else {
+                showAlert("Error", data.error || "Error al mejorar stat", 'error');
+            }
+        } catch (err) {
+            console.error("Error upgrading stat:", err);
+        }
+    };
+
+    const handleAddFriend = async (targetUsername) => {
+        try {
+            const res = await fetch(`${BACKEND_URL}/api/social/friends/add`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.id, friendUsername: targetUsername })
+            });
+            const data = await res.json();
+            
+            // Pequeño delay para asegurar que el modal anterior (si existe) se haya cerrado
+            setTimeout(() => {
+                if (res.ok) {
+                    showAlert("Éxito", `Solicitud enviada a ${targetUsername}`, 'success');
+                    fetchSocialData(); // Actualizar inmediatamente
+                } else {
+                    showAlert("Aviso", data.error || "Error al enviar solicitud", 'warning');
+                }
+            }, 100);
+        } catch (err) {
+            console.error("Error adding friend:", err);
+            setTimeout(() => {
+                showAlert("Error", "Error de conexión", 'error');
+            }, 100);
+        }
+    };
+
+    const handleRemoveFriend = async (friendId) => {
+        try {
+            const res = await fetch(`${BACKEND_URL}/api/social/friends/remove`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.id, friendId })
+            });
+            if (res.ok) {
+                showAlert("Éxito", "Amigo eliminado", 'success');
+                fetchSocialData();
+            }
+        } catch (err) {
+            console.error("Error removing friend:", err);
+        }
+    };
+
+    const handleSendMessageToPlayer = (targetUsername) => {
+        setProfileTargetId(null); // Cerrar perfil
+        setTimeout(() => {
+            EventBus.emit('chat-prefill', `/msg ${targetUsername} `);
+        }, 100);
+    };
+
+    const handleTradeRequest = (targetId) => {
+        sendMessage({ type: 'trade_request', targetId });
+        showAlert("Petición Enviada", "Esperando respuesta del otro jugador...");
+    };
+
+    const handleUpdateTrade = (gold, items) => {
+        setTradeData(prev => ({
+            ...prev,
+            myOffer: { gold, items },
+            meLocked: false,
+            meConfirmed: false
+        }));
+        sendMessage({ type: 'trade_update', gold, items });
+    };
+
+    const handleLockTrade = () => {
+        sendMessage({ type: 'trade_lock' });
+    };
+
+    const handleConfirmTrade = () => {
+        sendMessage({ type: 'trade_confirm' });
+    };
+
+    const handleSendTradeChat = (message) => {
+        setTradeData(prev => ({
+            ...prev,
+            chatMessages: [...prev.chatMessages, { sender: 'me', text: message }]
+        }));
+        sendMessage({ type: 'trade_chat', message });
+    };
+
+    const handleCancelTrade = () => {
+        sendMessage({ type: 'trade_cancel' });
+        setIsTradeOpen(false);
+        setTradeData(null);
     };
 
     const saveSettings = async (newSettings) => {
@@ -167,199 +530,150 @@ function App() {
                 <Auth onAuthSuccess={handleAuthSuccess} backendUrl={BACKEND_URL} />
             ) : (
                 <>
+                    {isTradeOpen && tradeData && (
+                        <TradeModal
+                            myPlayer={user.player}
+                            otherPlayerName={tradeData.otherPlayerName}
+                            otherOffers={tradeData.otherOffers}
+                            myOffer={tradeData.myOffer}
+                            meLocked={tradeData.meLocked}
+                            meConfirmed={tradeData.meConfirmed}
+                            chatMessages={tradeData.chatMessages}
+                            onUpdate={handleUpdateTrade}
+                            onLock={handleLockTrade}
+                            onConfirm={handleConfirmTrade}
+                            onChat={handleSendTradeChat}
+                            onCancel={handleCancelTrade}
+                        />
+                    )}
+
+                    {isSocialOpen && (
+                        <SocialModal
+                            userId={user.id}
+                            BACKEND_URL={BACKEND_URL}
+                            onClose={() => setIsSocialOpen(false)}
+                            initialFriends={friends}
+                            initialRequests={requests}
+                            onRefresh={fetchSocialData}
+                        />
+                    )}
+                    {showLoading && <LoadingScreen status={loadingStatus} />}
+                    
                     <PhaserGame userData={user} ref={phaserRef} />
-                    <HUD
-                        user={user}
-                        pos={pos}
-                        isMinimized={isHudMinimized}
-                        onToggleMinimize={() => setIsHudMinimized(!isHudMinimized)}
-                        onOpenSettings={() => setIsSettingsOpen(true)}
-                        onOpenInventory={() => setIsInventoryOpen(true)}
-                    />
-                    <Chat
-                        onSendMessage={sendMessage}
-                        myPlayerId={user.player.id}
-                        disabled={isAnyModalOpen}
-                    />
+                    
+                    {!showLoading && (
+                        <>
+                            <HUD
+                                user={user}
+                                mapId={currentMapId}
+                                pos={pos}
+                                isMinimized={isHudMinimized}
+                                onToggleMinimize={() => setIsHudMinimized(!isHudMinimized)}
+                                onOpenSettings={() => setIsSettingsOpen(true)}
+                                onOpenInventory={() => setIsInventoryOpen(true)}
+                                onOpenProfile={() => setProfileTargetId(user.player.id)}
+                                onOpenSocial={() => { console.log("Opening Social Modal"); setIsSocialOpen(true); }}
+                            />
+                            <Chat
+                                onSendMessage={sendMessage}
+                                myPlayerId={user.player.id}
+                                disabled={isAnyModalOpen}
+                                isVisible={isChatVisible}
+                                onToggle={setIsChatVisible}
+                            />
 
-                    {contextMenu && (
-                        <PlayerContextMenu
-                            data={contextMenu}
-                            onClose={() => setContextMenu(null)}
-                            phaserRef={phaserRef}
-                        />
-                    )}
+                            {currentMapId === 'map2' && (
+                                <button 
+                                    className={`return-tavern-btn ${isChatVisible ? 'chat-open' : ''}`}
+                                    onClick={() => EventBus.emit('change-map', 'map1', MAP_SPAWNS['map1'])}
+                                    title="Volver a la Taberna"
+                                >
+                                    <Home size={24} />
+                                </button>
+                            )}
 
-                    {chestData && (
-                        <ChestModal 
-                            onClaim={claimChest}
-                            onClose={() => setChestData(null)}
-                        />
-                    )}
+                            {contextMenu && (
+                                <PlayerContextMenu
+                                    data={contextMenu}
+                                    onClose={() => setContextMenu(null)}
+                                    phaserRef={phaserRef}
+                                    userId={user.id}
+                                    BACKEND_URL={BACKEND_URL}
+                                    onAddFriend={handleAddFriend}
+                                    onTrade={handleTradeRequest}
+                                    onViewProfile={(targetId) => setProfileTargetId(targetId)}
+                                    friends={friends}
+                                    requests={requests}
+                                />
+                            )}
 
-                    {doorData && (
-                        <DoorModal 
-                            onConfirm={() => { console.log("Saliendo..."); setDoorData(null); }}
-                            onClose={() => setDoorData(null)}
-                        />
-                    )}
+                            {chestData && (
+                                <ChestModal 
+                                    onClaim={claimChest}
+                                    onClose={() => setChestData(null)}
+                                />
+                            )}
 
-                    {isSettingsOpen && (
-                        <SettingsModal
-                            settings={settings}
-                            onSave={saveSettings}
-                            onClose={() => setIsSettingsOpen(false)}
-                        />
-                    )}
+                            {doorData && (
+                                <DoorModal 
+                                    onConfirm={() => { 
+                                        EventBus.emit('change-map', 'map2', MAP_SPAWNS['map2']);
+                                        setDoorData(null); 
+                                    }}
+                                    onClose={() => setDoorData(null)}
+                                />
+                            )}
 
-                    {isInventoryOpen && (
-                        <InventoryModal
-                            onClose={() => setIsInventoryOpen(false)}
-                        />
+                            {isSettingsOpen && (
+                                <SettingsModal
+                                    settings={settings}
+                                    onSave={saveSettings}
+                                    onClose={() => setIsSettingsOpen(false)}
+                                    userRole={user.role}
+                                />
+                            )}
+
+                            {isInventoryOpen && (
+                                <InventoryModal
+                                    inventoryItems={user.player.inventoryItems}
+                                    equipment={user.player.equipment}
+                                    onEquip={handleEquip}
+                                    onUnequip={handleUnequip}
+                                    onUse={handleUseItem}
+                                    onClose={() => setIsInventoryOpen(false)}
+                                />
+                            )}
+
+                            {isShopOpen && (
+                                <ShopModal
+                                    gold={user.player.gold}
+                                    inventoryItems={user.player.inventoryItems}
+                                    onBuy={handleBuyItems}
+                                    onSell={handleSellItems}
+                                    onClose={() => setIsShopOpen(false)}
+                                    backendUrl={BACKEND_URL}
+                                />
+                            )}
+                            {profileTargetId && (
+                                <ProfileModal
+                                    user={user}
+                                    targetId={profileTargetId}
+                                    friends={friends}
+                                    backendUrl={BACKEND_URL}
+                                    onUpgradeStat={handleUpgradeStat}
+                                    onAddFriend={handleAddFriend}
+                                    onRemoveFriend={handleRemoveFriend}
+                                    onSendMessage={handleSendMessageToPlayer}
+                                    onTrade={handleTradeRequest}
+                                    onClose={() => setProfileTargetId(null)}
+                                />
+                            )}
+                        </>
                     )}
                 </>
             )}
         </div>
     );
 }
-
-const PlayerContextMenu = ({ data, onClose, phaserRef }) => {
-    const [pos, setPos] = useState({ x: data.x, y: data.y });
-
-    useEffect(() => {
-        let frame;
-        const updatePos = () => {
-            if (phaserRef.current) {
-                const scene = phaserRef.current.game.scene.getScene('MainScene');
-                if (scene) {
-                    const screenPos = scene.getPlayerScreenPos(data.playerId);
-                    if (!screenPos || screenPos.outOfBounds) {
-                        onClose();
-                        return;
-                    }
-                    // Ajustamos el menú para que aparezca a la derecha y un poco arriba del centro del jugador
-                    setPos({ x: screenPos.x + 30, y: screenPos.y - 40 });
-                }
-            }
-            frame = requestAnimationFrame(updatePos);
-        };
-        updatePos();
-        return () => cancelAnimationFrame(frame);
-    }, [data.playerId, onClose, phaserRef]);
-
-    return (
-        <div
-            className="player-context-menu"
-            style={{ left: pos.x, top: pos.y }}
-            onClick={(e) => e.stopPropagation()}
-        >
-            <div className="menu-header">Opciones: {data.username}</div>
-            <div className="menu-options">
-                <button onClick={() => { console.log("Perfil", data.playerId); onClose(); }}>Ver Perfil</button>
-                <button onClick={() => { console.log("Comerciar", data.playerId); onClose(); }}>Comerciar</button>
-                <button onClick={() => { console.log("Mensaje", data.playerId); onClose(); }}>Mensaje</button>
-                <button onClick={() => { console.log("Amigos", data.playerId); onClose(); }}>Amigos</button>
-            </div>
-        </div>
-    );
-};
-
-const ChestModal = ({ onClaim, onClose }) => {
-    return (
-        <div className="auth-overlay">
-            <div className="auth-card chest-modal">
-                <div className="chest-icon">🎁</div>
-                <h2>¡Cofre Diario Encontrado!</h2>
-                <p>Contiene tesoros acumulados durante el día.</p>
-                <div className="reward-badge">
-                    <span className="amount">+100</span>
-                    <span className="currency">Oro</span>
-                </div>
-                <div className="modal-actions">
-                    <button className="primary-btn claim-btn" onClick={onClaim}>Reclamar Recompensa</button>
-                    <button className="secondary-btn" onClick={onClose}>Quizás luego</button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-const DoorModal = ({ onConfirm, onClose }) => {
-    return (
-        <div className="auth-overlay">
-            <div className="auth-card chest-modal door-modal">
-                <div className="chest-icon">🚪</div>
-                <h2>¿Salir al Exterior?</h2>
-                <p>Estás a punto de abandonar la taberna y salir al mundo exterior.</p>
-                <div className="modal-actions">
-                    <button className="primary-btn" onClick={onConfirm}>¡Sí, vamos!</button>
-                    <button className="secondary-btn" onClick={onClose}>Mejor me quedo</button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-const HUD = ({ user, pos, isMinimized, onToggleMinimize, onOpenSettings, onOpenInventory }) => (
-    <div className="hud">
-        <div className={`player-stats ${isMinimized ? 'minimized' : ''}`}>
-            <div className="hud-header">
-                <span className="name">{user.username}</span>
-                <div className="hud-actions">
-                    <button className="icon-btn" onClick={onToggleMinimize} title={isMinimized ? "Expandir" : "Minimizar"}>
-                        {isMinimized ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
-                    </button>
-                    {!isMinimized && (
-                        <>
-                            <button className="icon-btn" onClick={onOpenInventory} title="Inventario">
-                                <Package size={18} />
-                            </button>
-                            <button className="icon-btn" onClick={onOpenSettings} title="Ajustes">
-                                <Settings size={18} />
-                            </button>
-                        </>
-                    )}
-                </div>
-            </div>
-
-            <div className="stats-grid">
-                <div className="stat-box">
-                    <div className="stat-label-group">
-                        <Coins size={14} className="gold-val" />
-                        <span className="stat-label">Oro</span>
-                    </div>
-                    <span className="stat-value gold-val">{user.player.gold}</span>
-                </div>
-
-                {!isMinimized && (
-                    <div className="stat-box">
-                        <div className="stat-label-group">
-                            <Gem size={14} className="diamond-val" />
-                            <span className="stat-label">Diamantes</span>
-                        </div>
-                        <span className="stat-value diamond-val">{user.player.diamonds}</span>
-                    </div>
-                )}
-
-                <div className="stat-box">
-                    <div className="stat-label-group">
-                        <Zap size={14} className="exp-val" />
-                        <span className="stat-label">Experiencia</span>
-                    </div>
-                    <span className="stat-value exp-val">{user.player.experience} XP</span>
-                </div>
-            </div>
-
-            {!isMinimized && (
-                <div className="pos-row">
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <MapPin size={12} /> {Math.round(pos.x)}, {Math.round(pos.y)}
-                    </span>
-                    <span style={{ opacity: 0.5 }}>FPS: 60</span>
-                </div>
-            )}
-        </div>
-    </div>
-);
 
 export default App;

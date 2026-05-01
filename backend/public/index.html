@@ -3,353 +3,554 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Antigravity World | Simple MMO</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <title>MMO Admin Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        :root {
-            --primary: #6366f1;
-            --bg: #0f172a;
-            --card-bg: rgba(30, 41, 59, 0.8);
-            --text: #f8fafc;
-        }
-
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Outfit', sans-serif; }
-
-        body {
-            background: var(--bg);
-            color: var(--text);
-            height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-        }
-
-        /* Auth Screen */
-        #authScreen {
-            background: var(--card-bg);
-            backdrop-filter: blur(12px);
-            padding: 40px;
-            border-radius: 24px;
-            width: 100%;
-            max-width: 400px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-            z-index: 100;
-        }
-
-        h2 { margin-bottom: 24px; text-align: center; }
-        .form-group { margin-bottom: 16px; }
-        label { display: block; margin-bottom: 8px; font-size: 0.9rem; color: #94a3b8; }
-        input {
-            width: 100%;
-            background: rgba(15, 23, 42, 0.5);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            padding: 12px;
-            color: white;
-            outline: none;
-        }
-        button {
-            width: 100%;
-            background: var(--primary);
-            color: white;
-            border: none;
-            border-radius: 12px;
-            padding: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            margin-top: 8px;
-        }
-
-        /* Game Screen */
-        #gameScreen {
-            display: none;
-            width: 100vw;
-            height: 100vh;
-            position: relative;
-            background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
-        }
-
-        #world {
-            width: 2000px;
-            height: 2000px;
-            position: absolute;
-            background-image: 
-                linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
-            background-size: 50px 50px;
-        }
-
-        .player {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            position: absolute;
-            transition: all 0.1s linear;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            font-size: 10px;
-            box-shadow: 0 0 20px rgba(99, 102, 241, 0.5);
-        }
-
-        .player-name {
-            position: absolute;
-            top: -25px;
-            font-size: 12px;
-            white-space: nowrap;
-            background: rgba(0,0,0,0.5);
-            padding: 2px 8px;
-            border-radius: 10px;
-        }
-
-        /* Chat Overlay */
-        #chatOverlay {
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            width: 300px;
-            height: 200px;
-            background: rgba(15, 23, 42, 0.7);
-            backdrop-filter: blur(8px);
-            border-radius: 16px;
-            display: flex;
-            flex-direction: column;
-            padding: 10px;
-            border: 1px solid rgba(255,255,255,0.1);
-        }
-
-        #chatMessages {
-            flex: 1;
-            overflow-y: auto;
-            font-size: 14px;
-            margin-bottom: 10px;
-            padding-right: 5px;
-        }
-
-        #chatInput {
-            background: rgba(0,0,0,0.3);
-            border: 1px solid rgba(255,255,255,0.2);
-            padding: 8px;
-            border-radius: 8px;
-            color: white;
-            display: none;
-        }
-
-        .stats {
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            background: rgba(15, 23, 42, 0.7);
-            padding: 15px;
-            border-radius: 16px;
-            font-size: 14px;
-        }
+        body { font-family: 'Outfit', sans-serif; background-color: #0f172a; color: #f8fafc; }
+        .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .sidebar-item.active { background: #6366f1; color: white; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3); }
+        [x-cloak] { display: none !important; }
+        
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
     </style>
 </head>
-<body>
-    <div id="authScreen">
-        <h2 id="authTitle">Iniciar Sesión</h2>
-        <div class="form-group">
-            <label>Usuario</label>
-            <input type="text" id="username" placeholder="Tu nombre">
-        </div>
-        <div class="form-group">
-            <label>Contraseña</label>
-            <input type="password" id="password" placeholder="••••••••">
-        </div>
-        <button onclick="handleAuth()">Entrar al Mundo</button>
-        <p style="margin-top: 16px; text-align: center; font-size: 14px; color: #94a3b8; cursor: pointer;" onclick="toggleAuthMode()" id="authToggle">
-            ¿No tienes cuenta? Regístrate
-        </p>
+<body x-data="adminPanel()" x-init="init()">
+    
+    <div class="flex h-screen overflow-hidden">
+        
+        <!-- Sidebar -->
+        <aside class="w-64 glass h-full flex flex-col p-6 hidden md:flex">
+            <div class="flex items-center gap-3 mb-10">
+                <div class="w-10 h-10 bg-indigo-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                    <i class="fas fa-gamepad text-white"></i>
+                </div>
+                <h1 class="text-xl font-bold tracking-tight">MMO Admin</h1>
+            </div>
+
+            <nav class="space-y-2 flex-1">
+                <button @click="tab = 'dashboard'" :class="tab === 'dashboard' ? 'active' : ''" class="sidebar-item w-full flex items-center gap-3 p-3 rounded-xl text-slate-400 hover:text-white transition-all">
+                    <i class="fas fa-chart-line"></i> Dashboard
+                </button>
+                <button @click="tab = 'users'" :class="tab === 'users' ? 'active' : ''" class="sidebar-item w-full flex items-center gap-3 p-3 rounded-xl text-slate-400 hover:text-white transition-all">
+                    <i class="fas fa-users"></i> Usuarios
+                </button>
+                <button @click="tab = 'players'" :class="tab === 'players' ? 'active' : ''" class="sidebar-item w-full flex items-center gap-3 p-3 rounded-xl text-slate-400 hover:text-white transition-all">
+                    <i class="fas fa-user-ninja"></i> Jugadores
+                </button>
+                <button @click="tab = 'items'" :class="tab === 'items' ? 'active' : ''" class="sidebar-item w-full flex items-center gap-3 p-3 rounded-xl text-slate-400 hover:text-white transition-all">
+                    <i class="fas fa-boxes-stacked"></i> Ítems
+                </button>
+            </nav>
+
+            <div class="pt-6 border-t border-white/5">
+                <p class="text-xs text-slate-500 uppercase font-bold mb-4">Estado del Sistema</p>
+                <div class="flex items-center gap-2 text-sm text-emerald-400">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Servidor Online
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 overflow-y-auto p-8">
+            
+            <!-- Dashboard Tab -->
+            <div x-show="tab === 'dashboard'" x-cloak>
+                <header class="mb-10">
+                    <h2 class="text-3xl font-bold mb-2">Resumen General</h2>
+                    <p class="text-slate-400">Estado actual del mundo y la base de datos.</p>
+                </header>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+                    <div class="glass p-6 rounded-3xl">
+                        <div class="flex justify-between items-start mb-4">
+                            <div class="p-3 bg-indigo-500/10 text-indigo-500 rounded-2xl"><i class="fas fa-users text-xl"></i></div>
+                        </div>
+                        <h3 class="text-slate-400 text-sm font-medium">Total Usuarios</h3>
+                        <p class="text-3xl font-bold" x-text="users.length">0</p>
+                    </div>
+                    <div class="glass p-6 rounded-3xl">
+                        <div class="flex justify-between items-start mb-4">
+                            <div class="p-3 bg-amber-500/10 text-amber-500 rounded-2xl"><i class="fas fa-coins text-xl"></i></div>
+                        </div>
+                        <h3 class="text-slate-400 text-sm font-medium">Oro en Circulación</h3>
+                        <p class="text-3xl font-bold" x-text="totalGold()">0</p>
+                    </div>
+                    <div class="glass p-6 rounded-3xl">
+                        <div class="flex justify-between items-start mb-4">
+                            <div class="p-3 bg-emerald-500/10 text-emerald-500 rounded-2xl"><i class="fas fa-box text-xl"></i></div>
+                        </div>
+                        <h3 class="text-slate-400 text-sm font-medium">Ítems Creados</h3>
+                        <p class="text-3xl font-bold" x-text="items.length">0</p>
+                    </div>
+                    <div class="glass p-6 rounded-3xl">
+                        <div class="flex justify-between items-start mb-4">
+                            <div class="p-3 bg-rose-500/10 text-rose-500 rounded-2xl"><i class="fas fa-message text-xl"></i></div>
+                        </div>
+                        <h3 class="text-slate-400 text-sm font-medium">Log de Chat</h3>
+                        <p class="text-3xl font-bold">Activo</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div class="glass p-8 rounded-3xl">
+                        <h3 class="text-xl font-bold mb-6">Últimos Jugadores</h3>
+                        <div class="space-y-4">
+                            <template x-for="p in players.slice(-5).reverse()" :key="p.id">
+                                <div class="flex items-center justify-between p-4 bg-white/5 rounded-2xl">
+                                    <div class="flex items-center gap-4">
+                                        <div :style="'background-color: ' + p.color" class="w-10 h-10 rounded-full border-2 border-white/20"></div>
+                                        <div>
+                                            <p class="font-bold" x-text="p.user.username"></p>
+                                            <p class="text-xs text-slate-400" x-text="'Nivel ' + Math.floor(p.experience / 100)"></p>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <p class="text-amber-400 font-bold" x-text="p.gold + ' 🪙'"></p>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                    <div class="glass p-8 rounded-3xl">
+                        <h3 class="text-xl font-bold mb-6">Distribución de Oro</h3>
+                        <p class="text-slate-400 italic">Próximamente: Gráfico de economía</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Users Tab -->
+            <div x-show="tab === 'users'" x-cloak>
+                <header class="flex justify-between items-center mb-10">
+                    <div>
+                        <h2 class="text-3xl font-bold mb-2">Usuarios</h2>
+                        <p class="text-slate-400">Gestión de cuentas y accesos.</p>
+                    </div>
+                </header>
+
+                <div class="glass rounded-3xl overflow-hidden">
+                    <table class="w-full text-left">
+                        <thead class="bg-white/5 text-slate-400 uppercase text-xs">
+                            <tr>
+                                <th class="p-6">ID</th>
+                                <th class="p-6">Username</th>
+                                <th class="p-6">Email</th>
+                                <th class="p-6">Creado el</th>
+                                <th class="p-6">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-white/5">
+                            <template x-for="u in users" :key="u.id">
+                                <tr class="hover:bg-white/5 transition-all">
+                                    <td class="p-6 font-mono text-slate-500" x-text="u.id"></td>
+                                    <td class="p-6 font-bold" x-text="u.username"></td>
+                                    <td class="p-6 text-slate-300" x-text="u.email"></td>
+                                    <td class="p-6 text-slate-400" x-text="new Date(u.createdAt).toLocaleDateString()"></td>
+                                    <td class="p-6">
+                                        <button @click="deleteUser(u.id)" class="text-rose-400 hover:text-rose-300 transition-all">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Players Tab -->
+            <div x-show="tab === 'players'" x-cloak>
+                <header class="mb-10">
+                    <h2 class="text-3xl font-bold mb-2">Jugadores</h2>
+                    <p class="text-slate-400">Edición de estadísticas y posesiones.</p>
+                </header>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    <template x-for="p in players" :key="p.id">
+                        <div class="glass p-6 rounded-3xl relative overflow-hidden group">
+                            <div class="flex items-center gap-4 mb-6">
+                                <div :style="'background-color: ' + p.color" class="w-16 h-16 rounded-2xl shadow-xl shadow-white/5 border border-white/20"></div>
+                                <div>
+                                    <h3 class="text-xl font-bold" x-text="p.user.username"></h3>
+                                    <p class="text-indigo-400 text-sm font-bold uppercase tracking-wider" x-text="'ID: ' + p.id"></p>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-4 mb-6">
+                                <div class="bg-black/20 p-3 rounded-2xl">
+                                    <p class="text-xs text-slate-500 uppercase font-bold mb-1">Oro</p>
+                                    <div class="flex items-center gap-2">
+                                        <input type="number" x-model="p.gold" class="w-full bg-transparent font-bold text-amber-400 outline-none">
+                                        <span class="text-amber-500">🪙</span>
+                                    </div>
+                                </div>
+                                <div class="bg-black/20 p-3 rounded-2xl">
+                                    <p class="text-xs text-slate-500 uppercase font-bold mb-1">Experiencia</p>
+                                    <input type="number" x-model="p.experience" class="w-full bg-transparent font-bold text-indigo-400 outline-none">
+                                </div>
+                            </div>
+
+                            <div class="mb-6">
+                                <p class="text-xs text-slate-500 uppercase font-bold mb-3">Inventario</p>
+                                <div class="flex flex-wrap gap-2">
+                                    <template x-for="inv in p.inventoryItems" :key="inv.id">
+                                        <div class="bg-white/5 px-3 py-1 rounded-full text-xs flex items-center gap-2 border border-white/10">
+                                            <span x-text="inv.item.name"></span>
+                                            <span class="text-indigo-400 font-bold" x-text="'x' + inv.quantity"></span>
+                                        </div>
+                                    </template>
+                                    <template x-if="p.inventoryItems.length === 0">
+                                        <span class="text-slate-500 italic text-sm">Vacío</span>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <button @click="updatePlayer(p)" class="w-full p-3 bg-indigo-500 hover:bg-indigo-600 rounded-2xl font-bold transition-all flex items-center justify-center gap-2">
+                                <i class="fas fa-save"></i> Guardar Cambios
+                            </button>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Items Tab -->
+            <div x-show="tab === 'items'" x-cloak>
+                <header class="flex justify-between items-center mb-10">
+                    <div>
+                        <h2 class="text-3xl font-bold mb-2">Gestión de Ítems</h2>
+                        <p class="text-slate-400">Crea y edita los objetos del mundo.</p>
+                    </div>
+                    <button @click="openItemModal()" class="px-6 py-3 bg-indigo-500 hover:bg-indigo-600 rounded-2xl font-bold shadow-lg shadow-indigo-500/20 transition-all flex items-center gap-2">
+                        <i class="fas fa-plus"></i> Nuevo Ítem
+                    </button>
+                </header>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <template x-for="item in items" :key="item.id">
+                        <div class="glass rounded-3xl overflow-hidden group">
+                            <div class="aspect-square bg-white/5 flex items-center justify-center text-5xl relative">
+                                <template x-if="item.sprite_url">
+                                    <img :src="item.sprite_url" class="w-2/3 h-2/3 object-contain" />
+                                </template>
+                                <template x-if="!item.sprite_url">
+                                    <span x-text="getItemEmoji(item.type)"></span>
+                                </template>
+                                <span :class="item.rarity.toLowerCase()" class="absolute top-4 right-4 text-[10px] px-2 py-1 rounded-md font-bold uppercase tracking-tighter" x-text="item.rarity"></span>
+                            </div>
+                            <div class="p-6">
+                                <div class="flex justify-between items-start mb-2">
+                                    <h3 class="font-bold text-lg" x-text="item.name"></h3>
+                                    <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                        <button @click="openItemModal(item)" class="text-indigo-400 hover:text-indigo-300"><i class="fas fa-edit"></i></button>
+                                        <button @click="deleteItem(item.id)" class="text-rose-400 hover:text-rose-300"><i class="fas fa-trash"></i></button>
+                                    </div>
+                                </div>
+                                <p class="text-slate-400 text-sm mb-4 line-clamp-2 h-10" x-text="item.description"></p>
+                                <div class="flex justify-between items-center border-t border-white/5 pt-4">
+                                    <div>
+                                        <p class="text-xs text-slate-500 font-bold uppercase">Precio</p>
+                                        <p class="text-amber-400 font-bold" x-text="item.buyPrice + ' 🪙'"></p>
+                                    </div>
+                                    <div class="text-right">
+                                        <p class="text-xs text-slate-500 font-bold uppercase">Venta</p>
+                                        <p class="text-slate-300 font-bold" x-text="item.sellPrice + ' 🪙'"></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+        </main>
     </div>
 
-    <div id="gameScreen">
-        <div id="world"></div>
-        <div class="stats">
-            <div id="statName">Jugador: -</div>
-            <div>Oro: <span id="statGold">0</span></div>
-            <div>Exp: <span id="statExp">0</span></div>
-        </div>
-        <div id="chatOverlay">
-            <div id="chatMessages"></div>
-            <input type="text" id="chatInput" placeholder="Presiona Enter para enviar...">
+    <!-- Item Modal -->
+    <div x-show="modalOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div class="glass w-full max-w-xl p-6 sm:p-8 rounded-[2rem] shadow-2xl max-h-[90vh] flex flex-col">
+            <h3 class="text-2xl font-bold mb-6 shrink-0" x-text="currentItem.id ? 'Editar Ítem' : 'Crear Nuevo Ítem'"></h3>
+            
+            <div class="overflow-y-auto flex-1 pr-2">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="col-span-1 sm:col-span-2">
+                    <label class="block text-slate-400 text-sm font-bold mb-2 uppercase">Nombre</label>
+                    <input type="text" x-model="currentItem.name" class="w-full bg-black/30 border border-white/10 rounded-2xl p-4 text-white outline-none focus:border-indigo-500 transition-all">
+                </div>
+                <div class="col-span-1 sm:col-span-2">
+                    <label class="block text-slate-400 text-sm font-bold mb-2 uppercase">Descripción</label>
+                    <textarea x-model="currentItem.description" class="w-full bg-black/30 border border-white/10 rounded-2xl p-4 text-white outline-none focus:border-indigo-500 transition-all" rows="2"></textarea>
+                </div>
+                <div class="col-span-1 sm:col-span-2">
+                    <label class="block text-slate-400 text-sm font-bold mb-2 uppercase">Sprite URL (Opcional)</label>
+                    <input type="text" x-model="currentItem.sprite_url" placeholder="https://ejemplo.com/item.png" class="w-full bg-black/30 border border-white/10 rounded-2xl p-4 text-white outline-none focus:border-indigo-500 transition-all">
+                </div>
+                
+                <!-- Tipo y Rareza (misma fila en desktop) -->
+                <div>
+                    <label class="block text-slate-400 text-sm font-bold mb-2 uppercase">Tipo</label>
+                    <select x-model="currentItem.type" class="w-full bg-black/30 border border-white/10 rounded-2xl p-4 text-white outline-none focus:border-indigo-500 transition-all appearance-none">
+                        <option value="WEAPON">⚔️ Arma</option>
+                        <option value="ARMOR">🛡️ Armadura</option>
+                        <option value="CONSUMABLE">🧪 Consumible</option>
+                        <option value="EQUIPMENT">💍 Equipamiento</option>
+                        <option value="OTHER">📦 Otro</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-slate-400 text-sm font-bold mb-2 uppercase">Rareza</label>
+                    <select x-model="currentItem.rarity" class="w-full bg-black/30 border border-white/10 rounded-2xl p-4 text-white outline-none focus:border-indigo-500 transition-all appearance-none">
+                        <option value="COMMON">Gris - Común</option>
+                        <option value="RARE">Azul - Raro</option>
+                        <option value="EPIC">Púrpura - Épico</option>
+                        <option value="LEGENDARY">Dorado - Legendario</option>
+                    </select>
+                </div>
+
+                <!-- Slot (Condicional, fila completa) -->
+                <div x-show="currentItem.type === 'EQUIPMENT' || currentItem.type === 'ARMOR' || currentItem.type === 'WEAPON'" class="col-span-1 sm:col-span-2">
+                    <label class="block text-slate-400 text-sm font-bold mb-2 uppercase">Slot de Equipamiento</label>
+                    <select x-model="currentItem.slot" class="w-full bg-black/30 border border-white/10 rounded-2xl p-4 text-white outline-none focus:border-indigo-500 transition-all appearance-none">
+                        <option value="">-- Seleccionar Slot --</option>
+                        <option value="head">Cabeza (Head)</option>
+                        <option value="torso">Torso</option>
+                        <option value="legs">Piernas (Legs)</option>
+                        <option value="arms">Brazos (Arms)</option>
+                        <option value="boots">Botas (Boots)</option>
+                        <option value="necklace">Collar (Necklace)</option>
+                        <option value="ring">Anillo (Ring)</option>
+                        <option value="weapon">Arma (Weapon)</option>
+                    </select>
+                </div>
+
+                <!-- Stats (Condicional para Equipo) -->
+                <div x-show="currentItem.type === 'EQUIPMENT' || currentItem.type === 'ARMOR' || currentItem.type === 'WEAPON'" class="col-span-1 sm:col-span-2">
+                    <label class="block text-slate-400 text-sm font-bold mb-4 uppercase text-center border-t border-white/10 pt-4">Bonificaciones de Stats</label>
+                    <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                        <div>
+                            <label class="block text-xs text-slate-500 mb-1">Fuerza (STR)</label>
+                            <input type="number" x-model="currentItem.stats.str" class="w-full bg-black/30 border border-white/10 rounded-xl p-2 text-white outline-none focus:border-indigo-500 text-center">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-500 mb-1">Destreza (DEX)</label>
+                            <input type="number" x-model="currentItem.stats.dex" class="w-full bg-black/30 border border-white/10 rounded-xl p-2 text-white outline-none focus:border-indigo-500 text-center">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-500 mb-1">Intel. (INT)</label>
+                            <input type="number" x-model="currentItem.stats.int" class="w-full bg-black/30 border border-white/10 rounded-xl p-2 text-white outline-none focus:border-indigo-500 text-center">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-500 mb-1">Vitalidad (VIT)</label>
+                            <input type="number" x-model="currentItem.stats.vit" class="w-full bg-black/30 border border-white/10 rounded-xl p-2 text-white outline-none focus:border-indigo-500 text-center">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-500 mb-1">Suerte (LUK)</label>
+                            <input type="number" x-model="currentItem.stats.luk" class="w-full bg-black/30 border border-white/10 rounded-xl p-2 text-white outline-none focus:border-indigo-500 text-center">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-500 mb-1">Armadura</label>
+                            <input type="number" x-model="currentItem.stats.armor" class="w-full bg-black/30 border border-white/10 rounded-xl p-2 text-white outline-none focus:border-indigo-500 text-center">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Efectos de Consumible (Condicional) -->
+                <div x-show="currentItem.type === 'CONSUMABLE'" class="col-span-1 sm:col-span-2">
+                    <label class="block text-slate-400 text-sm font-bold mb-4 uppercase text-center border-t border-white/10 pt-4">Efectos del Consumible</label>
+                    
+                    <div class="space-y-3">
+                        <template x-for="(effect, index) in currentItem.stats.effects || []" :key="index">
+                            <div class="flex items-end gap-2 bg-black/20 p-4 rounded-2xl border border-white/5">
+                                <div class="flex-1">
+                                    <label class="block text-[10px] text-slate-500 mb-1 uppercase">Tipo de Efecto</label>
+                                    <select x-model="effect.type" class="w-full bg-black/30 border border-white/10 rounded-xl p-2 text-xs text-white outline-none">
+                                        <option value="get_gold">💰 Dar Oro</option>
+                                        <option value="get_diamonds">💎 Dar Diamantes</option>
+                                        <option value="get_xp">✨ Dar Experiencia</option>
+                                        <option value="get_stat_point">⭐ Dar Puntos de Stat</option>
+                                    </select>
+                                </div>
+                                
+                                <template x-if="effect.type === 'get_stat_point'">
+                                    <div class="w-24">
+                                        <label class="block text-[10px] text-slate-500 mb-1 uppercase">Stat</label>
+                                        <select x-model="effect.stat" class="w-full bg-black/30 border border-white/10 rounded-xl p-2 text-xs text-white outline-none">
+                                            <option value="str">STR</option>
+                                            <option value="dex">DEX</option>
+                                            <option value="int">INT</option>
+                                            <option value="vit">VIT</option>
+                                            <option value="luk">LUK</option>
+                                            <option value="armor">Armor</option>
+                                        </select>
+                                    </div>
+                                </template>
+
+                                <div class="w-20">
+                                    <label class="block text-[10px] text-slate-500 mb-1 uppercase">Valor</label>
+                                    <input type="number" x-model="effect.value" class="w-full bg-black/30 border border-white/10 rounded-xl p-2 text-xs text-white outline-none text-center">
+                                </div>
+
+                                <button @click="currentItem.stats.effects.splice(index, 1)" class="p-2 text-rose-400 hover:bg-rose-500/10 rounded-lg">
+                                    <i class="fas fa-trash-can"></i>
+                                </button>
+                            </div>
+                        </template>
+
+                        <button @click="addEffect()" class="w-full py-2 border-2 border-dashed border-white/10 rounded-2xl text-slate-500 hover:text-white hover:border-white/20 transition-all text-xs font-bold uppercase">
+                            <i class="fas fa-plus mr-2"></i> Añadir Efecto
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Precios (misma fila en desktop) -->
+                <div>
+                    <label class="block text-slate-400 text-sm font-bold mb-2 uppercase">Precio Compra</label>
+                    <input type="number" x-model="currentItem.buyPrice" class="w-full bg-black/30 border border-white/10 rounded-2xl p-4 text-white outline-none focus:border-indigo-500 transition-all">
+                </div>
+                <div>
+                    <label class="block text-slate-400 text-sm font-bold mb-2 uppercase">Precio Venta</label>
+                    <input type="number" x-model="currentItem.sellPrice" class="w-full bg-black/30 border border-white/10 rounded-2xl p-4 text-white outline-none focus:border-indigo-500 transition-all">
+                </div>
+                </div>
+            </div>
+
+            <div class="flex gap-3 shrink-0 mt-6">
+                <button @click="modalOpen = false" class="flex-1 p-4 bg-white/5 hover:bg-white/10 rounded-2xl font-bold transition-all">Cancelar</button>
+                <button @click="saveItem()" class="flex-1 p-4 bg-indigo-500 hover:bg-indigo-600 rounded-2xl font-bold transition-all">Confirmar</button>
+            </div>
         </div>
     </div>
+
+    <style>
+        .common { background: #94a3b8; color: #0f172a; }
+        .rare { background: #38bdf8; color: #0f172a; }
+        .epic { background: #a78bfa; color: #0f172a; }
+        .legendary { background: #fbbf24; color: #0f172a; }
+    </style>
 
     <script>
-        let socket;
-        let isRegister = false;
-        let me = { id: null, x: 0, y: 0, name: '' };
-        let players = {};
-        const world = document.getElementById('world');
-        const speed = 10;
-        let keys = {};
+        function adminPanel() {
+            return {
+                tab: 'dashboard',
+                users: [],
+                players: [],
+                items: [],
+                modalOpen: false,
+                currentItem: {},
 
-        function toggleAuthMode() {
-            isRegister = !isRegister;
-            document.getElementById('authTitle').textContent = isRegister ? 'Registrarse' : 'Iniciar Sesión';
-            document.getElementById('authToggle').textContent = isRegister ? 'Ya tengo cuenta' : '¿No tienes cuenta? Regístrate';
-        }
+                async init() {
+                    await this.fetchData();
+                },
 
-        async function handleAuth() {
-            const user = document.getElementById('username').value;
-            const pass = document.getElementById('password').value;
-            const endpoint = isRegister ? '/api/auth/register' : '/api/auth/login';
+                async fetchData() {
+                    try {
+                        const [uRes, pRes, iRes] = await Promise.all([
+                            fetch('/api/admin/users'),
+                            fetch('/api/admin/players'),
+                            fetch('/api/admin/items')
+                        ]);
+                        this.users = await uRes.json();
+                        this.players = await pRes.json();
+                        this.items = await iRes.json();
+                    } catch (e) { console.error("Error fetching data", e); }
+                },
 
-            try {
-                const res = await fetch(endpoint, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username: user, password: pass })
-                });
-                const data = await res.json();
+                totalGold() {
+                    return this.players.reduce((acc, p) => acc + (p.gold || 0), 0).toLocaleString();
+                },
 
-                if (data.error) return alert(data.error);
+                getItemEmoji(type) {
+                    const map = { WEAPON: '⚔️', ARMOR: '🛡️', CONSUMABLE: '🧪', EQUIPMENT: '💍' };
+                    return map[type] || '📦';
+                },
 
-                // For simplicity, we just log in if registered
-                if (isRegister) {
-                    isRegister = false;
-                    return handleAuth();
-                }
+                // USER ACTIONS
+                async deleteUser(id) {
+                    if(!confirm('¿Seguro que quieres borrar este usuario? Perderá todo su progreso.')) return;
+                    await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+                    this.fetchData();
+                },
 
-                initGame(data.user, data.token);
-            } catch (e) { console.error(e); }
-        }
+                // PLAYER ACTIONS
+                async updatePlayer(player) {
+                    await fetch(`/api/admin/players/${player.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            gold: parseInt(player.gold), 
+                            experience: parseInt(player.experience) 
+                        })
+                    });
+                    alert('Jugador actualizado');
+                    this.fetchData();
+                },
 
-        function initGame(userData, token) {
-            me.id = userData.player.id;
-            me.x = userData.player.x;
-            me.y = userData.player.y;
-            me.name = userData.username;
+                // ITEM ACTIONS
+                openItemModal(item = null) {
+                    const defaultStats = { str: 0, dex: 0, int: 0, vit: 0, luk: 0, armor: 0, effects: [] };
+                    if (item) {
+                        let stats = item.stats || {};
+                        if (typeof stats === 'string') stats = JSON.parse(stats);
+                        this.currentItem = { ...item, stats: { ...defaultStats, ...stats } };
+                        // Ensure effects is an array if it's a consumable
+                        if (!this.currentItem.stats.effects) this.currentItem.stats.effects = [];
+                    } else {
+                        this.currentItem = { name: '', description: '', type: 'OTHER', rarity: 'COMMON', buyPrice: 0, sellPrice: 0, sprite_url: '', slot: '', stats: { ...defaultStats } };
+                    }
+                    this.modalOpen = true;
+                },
 
-            document.getElementById('authScreen').style.display = 'none';
-            document.getElementById('gameScreen').style.display = 'block';
-            document.getElementById('statName').textContent = `Jugador: ${me.name}`;
-            document.getElementById('statGold').textContent = userData.player.gold;
-            document.getElementById('statExp').textContent = userData.player.experience;
+                addEffect() {
+                    if (!this.currentItem.stats.effects) {
+                        this.currentItem.stats = { ...this.currentItem.stats, effects: [] };
+                    }
+                    this.currentItem.stats.effects.push({ type: 'get_gold', value: 0, stat: 'str' });
+                },
 
-            connectWS();
-            gameLoop();
-        }
+                async saveItem() {
+                    const method = this.currentItem.id ? 'PUT' : 'POST';
+                    const url = this.currentItem.id ? `/api/admin/items/${this.currentItem.id}` : '/api/admin/items';
+                    
+                    const res = await fetch(url, {
+                        method,
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            ...this.currentItem,
+                            buyPrice: parseInt(this.currentItem.buyPrice),
+                            sellPrice: parseInt(this.currentItem.sellPrice),
+                            stats: this.currentItem.type === 'CONSUMABLE' ? {
+                                effects: (this.currentItem.stats.effects || []).map(e => ({
+                                    type: e.type,
+                                    value: parseInt(e.value) || 0,
+                                    stat: e.type === 'get_stat_point' ? e.stat : undefined
+                                }))
+                            } : {
+                                str: parseInt(this.currentItem.stats.str) || 0,
+                                dex: parseInt(this.currentItem.stats.dex) || 0,
+                                int: parseInt(this.currentItem.stats.int) || 0,
+                                vit: parseInt(this.currentItem.stats.vit) || 0,
+                                luk: parseInt(this.currentItem.stats.luk) || 0,
+                                armor: parseInt(this.currentItem.stats.armor) || 0
+                            }
+                        })
+                    });
 
-        function connectWS() {
-            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-            socket = new WebSocket(`${protocol}//${location.host}`);
+                    if(res.ok) {
+                        this.modalOpen = false;
+                        this.fetchData();
+                    }
+                },
 
-            socket.onopen = () => {
-                socket.send(JSON.stringify({ type: 'login', playerId: me.id }));
-            };
-
-            socket.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                if (data.type === 'player_joined' || data.type === 'player_moved') {
-                    updateOtherPlayer(data);
-                }
-                if (data.type === 'player_left') {
-                    removePlayer(data.playerId);
-                }
-                if (data.type === 'chat') {
-                    addChatMessage(`${data.playerId === me.id ? 'Tú' : 'Jugador ' + data.playerId}: ${data.message}`);
-                }
-            };
-        }
-
-        function updateOtherPlayer(data) {
-            if (data.playerId === me.id && data.type === 'player_moved') return;
-            
-            const id = data.player ? data.player.id : data.playerId;
-            if (!players[id]) {
-                const el = document.createElement('div');
-                el.className = 'player';
-                el.style.backgroundColor = data.player?.color || '#6366f1';
-                el.innerHTML = `<span class="player-name">Jugador ${id}</span>`;
-                world.appendChild(el);
-                players[id] = { el, x: 0, y: 0 };
-            }
-
-            if (data.x !== undefined) {
-                players[id].x = data.x;
-                players[id].y = data.y;
-                players[id].el.style.left = data.x + 'px';
-                players[id].el.style.top = data.y + 'px';
-            }
-        }
-
-        function removePlayer(id) {
-            if (players[id]) {
-                world.removeChild(players[id].el);
-                delete players[id];
-            }
-        }
-
-        window.addEventListener('keydown', (e) => {
-            keys[e.key.toLowerCase()] = true;
-            if (e.key === 'Enter') toggleChat();
-        });
-        window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
-
-        function toggleChat() {
-            const input = document.getElementById('chatInput');
-            if (document.activeElement === input) {
-                const msg = input.value.trim();
-                if (msg) socket.send(JSON.stringify({ type: 'chat', message: msg }));
-                input.value = '';
-                input.style.display = 'none';
-                input.blur();
-            } else {
-                input.style.display = 'block';
-                input.focus();
-            }
-        }
-
-        function gameLoop() {
-            let moved = false;
-            if (document.activeElement !== document.getElementById('chatInput')) {
-                if (keys['w']) { me.y -= speed; moved = true; }
-                if (keys['s']) { me.y += speed; moved = true; }
-                if (keys['a']) { me.x -= speed; moved = true; }
-                if (keys['d']) { me.x += speed; moved = true; }
-            }
-
-            if (moved) {
-                // Update my position
-                const myEl = document.getElementById('myPlayer') || createMyPlayer();
-                myEl.style.left = me.x + 'px';
-                myEl.style.top = me.y + 'px';
-                
-                // Camera follow
-                world.style.transform = `translate(${680 - me.x}px, ${315 - me.y}px)`;
-                
-                // Send to server
-                if (socket.readyState === WebSocket.OPEN) {
-                    socket.send(JSON.stringify({ type: 'move', x: me.x, y: me.y }));
+                async deleteItem(id) {
+                    if(!confirm('¿Borrar este ítem permanentemente?')) return;
+                    await fetch(`/api/admin/items/${id}`, { method: 'DELETE' });
+                    this.fetchData();
                 }
             }
-
-            requestAnimationFrame(gameLoop);
-        }
-
-        function createMyPlayer() {
-            const el = document.createElement('div');
-            el.id = 'myPlayer';
-            el.className = 'player';
-            el.style.backgroundColor = '#10b981';
-            el.style.zIndex = '10';
-            el.innerHTML = `<span class="player-name">${me.name} (Tú)</span>`;
-            world.appendChild(el);
-            return el;
-        }
-
-        function addChatMessage(msg) {
-            const container = document.getElementById('chatMessages');
-            const div = document.createElement('div');
-            div.textContent = msg;
-            container.appendChild(div);
-            container.scrollTop = container.scrollHeight;
         }
     </script>
 </body>
 </html>
-

@@ -1,10 +1,13 @@
 import { useState } from 'react';
+import { Settings, X, Volume2, Users, MessageSquare, ZoomIn, Terminal } from 'lucide-react';
 
-export const SettingsModal = ({ settings, onSave, onClose }) => {
+export const SettingsModal = ({ settings, onSave, onClose, userRole }) => {
     const [localSettings, setLocalSettings] = useState(settings || {
         showChatBubbles: true,
         showOtherPlayers: true,
-        enableMusic: false
+        enableMusic: false,
+        zoom: 0,
+        showHitboxes: false
     });
 
     const handleToggle = (key) => {
@@ -18,14 +21,23 @@ export const SettingsModal = ({ settings, onSave, onClose }) => {
 
     return (
         <div className="auth-overlay">
-            <div className="auth-card settings-card">
-                <h2>Configuración</h2>
+            <div className="auth-card rpg-shop">
+                <div className="rpg-header">
+                    <div className="rpg-title">
+                        <h2>Preferencias</h2>
+                        <span className="rpg-subtitle">Configuración del Sistema</span>
+                    </div>
+                    <button className="icon-btn" onClick={onClose}><X size={20} /></button>
+                </div>
                 
-                <div className="settings-list">
-                    <div className="setting-item">
-                        <div className="setting-info">
-                            <span className="setting-label">Burbujas de Chat</span>
-                            <span className="setting-desc">Muestra mensajes sobre los jugadores</span>
+                <div className="rpg-body">
+                    <div className="rpg-item-card stat-item">
+                        <div className="rpg-item-icon">
+                            <MessageSquare size={18} />
+                        </div>
+                        <div className="rpg-item-info">
+                            <span className="rpg-item-name">Burbujas de Chat</span>
+                            <span className="rpg-item-type">Visualización de mensajes</span>
                         </div>
                         <label className="switch">
                             <input 
@@ -37,10 +49,13 @@ export const SettingsModal = ({ settings, onSave, onClose }) => {
                         </label>
                     </div>
 
-                    <div className="setting-item">
-                        <div className="setting-info">
-                            <span className="setting-label">Mostrar Jugadores</span>
-                            <span className="setting-desc">Ver a otros usuarios en el mapa</span>
+                    <div className="rpg-item-card stat-item">
+                        <div className="rpg-item-icon">
+                            <Users size={18} />
+                        </div>
+                        <div className="rpg-item-info">
+                            <span className="rpg-item-name">Mostrar Jugadores</span>
+                            <span className="rpg-item-type">Ver a otros usuarios</span>
                         </div>
                         <label className="switch">
                             <input 
@@ -52,10 +67,13 @@ export const SettingsModal = ({ settings, onSave, onClose }) => {
                         </label>
                     </div>
 
-                    <div className="setting-item">
-                        <div className="setting-info">
-                            <span className="setting-label">Música de Fondo</span>
-                            <span className="setting-desc">Activa la música del mundo</span>
+                    <div className="rpg-item-card stat-item">
+                        <div className="rpg-item-icon">
+                            <Volume2 size={18} />
+                        </div>
+                        <div className="rpg-item-info">
+                            <span className="rpg-item-name">Música de Fondo</span>
+                            <span className="rpg-item-type">Audio ambiental</span>
                         </div>
                         <label className="switch">
                             <input 
@@ -66,13 +84,68 @@ export const SettingsModal = ({ settings, onSave, onClose }) => {
                             <span className="slider"></span>
                         </label>
                     </div>
+
+                    <div className="rpg-item-card stat-item vertical-setting">
+                        <div className="setting-header-row">
+                            <div className="rpg-item-icon">
+                                <ZoomIn size={18} />
+                            </div>
+                            <div className="rpg-item-info">
+                                <span className="rpg-item-name">Ajuste de Zoom: {localSettings.zoom > 0 ? '+' : ''}{localSettings.zoom?.toFixed(1)}</span>
+                            </div>
+                        </div>
+                        <input 
+                            type="range" 
+                            min="-0.5" 
+                            max="1" 
+                            step="0.5" 
+                            value={localSettings.zoom || 0} 
+                            onChange={(e) => setLocalSettings(prev => ({ ...prev, zoom: parseFloat(e.target.value) }))}
+                            className="zoom-slider"
+                            style={{ marginTop: '8px' }}
+                        />
+                    </div>
+
+                    {userRole === 'dev' && (
+                        <div className="rpg-item-card stat-item dev-tools">
+                            <div className="rpg-item-icon" style={{ background: 'rgba(239, 68, 68, 0.1)' }}>
+                                <Terminal size={18} color="#ef4444" />
+                            </div>
+                            <div className="rpg-item-info">
+                                <span className="rpg-item-name" style={{ color: '#ef4444' }}>Modo Debug (Hitboxes)</span>
+                                <span className="rpg-item-type">Herramientas de Desarrollador</span>
+                            </div>
+                            <label className="switch">
+                                <input 
+                                    type="checkbox" 
+                                    checked={localSettings.showHitboxes} 
+                                    onChange={() => handleToggle('showHitboxes')}
+                                />
+                                <span className="slider"></span>
+                            </label>
+                        </div>
+                    )}
                 </div>
 
-                <div className="settings-actions">
-                    <button className="primary-btn" onClick={handleSave}>Guardar Cambios</button>
-                    <button className="secondary-btn" onClick={onClose}>Cancelar</button>
+                <div className="rpg-footer">
+                    <button className="secondary-btn mini" onClick={onClose} style={{ width: 'auto' }}>Cancelar</button>
+                    <button className="primary-btn mini" onClick={handleSave} style={{ width: 'auto' }}>Guardar</button>
                 </div>
             </div>
+
+            <style>{`
+                .vertical-setting {
+                    flex-direction: column !important;
+                    align-items: flex-start !important;
+                    gap: 8px !important;
+                }
+                .setting-header-row {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    width: 100%;
+                }
+            `}</style>
         </div>
     );
 };
