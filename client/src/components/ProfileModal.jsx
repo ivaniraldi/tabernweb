@@ -95,7 +95,9 @@ export const ProfileModal = ({ user, targetId, friends = [], backendUrl, onUpgra
                 <div className="rpg-header">
                     <div className="rpg-title">
                         <h2>{isMe ? 'Mi Perfil' : `Perfil de ${username}`}</h2>
-                        <span className="rpg-subtitle">Nivel {level}</span>
+                        <span className="rpg-subtitle" style={{textTransform: 'capitalize'}}>
+                            {player.class || 'Aventurero'} • Nivel {level}
+                        </span>
                     </div>
                     <button className="icon-btn" onClick={onClose}><X size={20} /></button>
                 </div>

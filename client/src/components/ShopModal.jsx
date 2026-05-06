@@ -50,20 +50,21 @@ export const ShopModal = ({ gold, inventoryItems = [], onBuy, onSell, onClose, b
         setMousePos({ x: e.clientX, y: e.clientY });
     };
 
-    const addToOrder = (dataItem) => {
+    const addToOrder = (dataItem, all = false) => {
         const isSell = activeTab === 'sell';
         setOrder(prev => {
             const id = isSell ? dataItem.id : dataItem.id;
             const existing = prev.find(i => i.id === id);
+            const qtyToAdd = all ? (isSell ? dataItem.quantity : 99) : 1;
             
             if (existing) {
-                if (isSell && existing.quantity >= dataItem.quantity) return prev;
-                return prev.map(i => i.id === id ? { ...i, quantity: i.quantity + 1 } : i);
+                const newQty = all ? (isSell ? dataItem.quantity : 99) : Math.min(existing.quantity + 1, dataItem.quantity || 99);
+                return prev.map(i => i.id === id ? { ...i, quantity: newQty } : i);
             } else {
                 return [...prev, { 
                     id, 
                     item: isSell ? dataItem.item : dataItem, 
-                    quantity: 1, 
+                    quantity: qtyToAdd, 
                     maxQuantity: isSell ? dataItem.quantity : 99 
                 }];
             }
@@ -212,7 +213,17 @@ export const ShopModal = ({ gold, inventoryItems = [], onBuy, onSell, onClose, b
                             ))
                         ) : (
                             inventoryItems.length > 0 ? (
-                                inventoryItems.map(invItem => (
+                                <>
+                                    <div style={{ gridColumn: '1 / -1', marginBottom: '8px' }}>
+                                        <button 
+                                            className="primary-btn mini" 
+                                            onClick={() => inventoryItems.forEach(item => addToOrder(item, true))}
+                                            style={{ background: '#10b981', width: '100%', fontSize: '0.8rem' }}
+                                        >
+                                            Seleccionar Todo el Inventario para Vender
+                                        </button>
+                                    </div>
+                                    {inventoryItems.map(invItem => (
                                     <div 
                                         key={invItem.id} 
                                         className="rpg-item-card shop-card-revamp"
@@ -241,13 +252,22 @@ export const ShopModal = ({ gold, inventoryItems = [], onBuy, onSell, onClose, b
                                                 className="add-btn sell-variant" 
                                                 onClick={() => addToOrder(invItem)}
                                                 disabled={order.find(o => o.id === invItem.id)?.quantity >= invItem.quantity}
+                                                style={{ flex: 0.5 }}
                                             >
-                                                <span className="price-tag">{invItem.item.sellPrice} <Coins size={10} /></span>
                                                 <Plus size={12} />
+                                            </button>
+                                            <button 
+                                                className="add-btn sell-variant" 
+                                                onClick={() => addToOrder(invItem, true)}
+                                                disabled={order.find(o => o.id === invItem.id)?.quantity >= invItem.quantity}
+                                                style={{ fontSize: '0.6rem', padding: '0 4px', whiteSpace: 'nowrap' }}
+                                            >
+                                                TODO
                                             </button>
                                         </div>
                                     </div>
-                                ))
+                                ))}
+                                </>
                             ) : (
                                 <div className="status-text">Tu morral está vacío.</div>
                             )
@@ -361,6 +381,12 @@ export const ShopModal = ({ gold, inventoryItems = [], onBuy, onSell, onClose, b
                                     <div className="extra-info-box">
                                         <span className="label">Nivel Req.</span>
                                         <span className="val">{inspectingItem.levelRequired || 1}</span>
+                                    </div>
+                                    <div className="extra-info-box">
+                                        <span className="label">Clases</span>
+                                        <span className="val" style={{textTransform: 'capitalize', fontSize: '0.75rem'}}>
+                                            {inspectingItem.allowedClasses === 'all' ? 'Todas' : inspectingItem.allowedClasses}
+                                        </span>
                                     </div>
                                 </div>
                             </div>

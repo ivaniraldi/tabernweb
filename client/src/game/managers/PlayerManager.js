@@ -1,3 +1,6 @@
+import { HitboxConfig } from '../HitboxConfig';
+import { SpriteConfig } from '../SpriteConfig';
+
 export class PlayerManager {
     constructor(scene) {
         this.scene = scene;
@@ -5,21 +8,14 @@ export class PlayerManager {
     }
 
     createAnimations() {
-        const config = [
-            { key: 'walk-down', prefix: 'player_down_', frames: 6 },
-            { key: 'walk-up', prefix: 'player_up_', frames: 6 },
-            { key: 'walk-side', prefix: 'player_side_', frames: 6 },
-            { key: 'walk-down-side', prefix: 'player_down_side_', frames: 6 },
-            { key: 'walk-up-side', prefix: 'player_up_side_', frames: 6 },
-            { key: 'idle', prefix: 'player_idle_', frames: 10 }
-        ];
-
-        config.forEach(cfg => {
+        const playerCfg = SpriteConfig.player;
+        
+        playerCfg.animations.forEach(anim => {
             this.scene.anims.create({
-                key: cfg.key,
-                frames: Array.from({ length: cfg.frames }, (_, i) => ({ key: `${cfg.prefix}${i + 1}` })),
-                frameRate: 10,
-                repeat: -1
+                key: anim.key,
+                frames: Array.from({ length: anim.frames }, (_, i) => ({ key: `${anim.loadPrefix}${i + 1}` })),
+                frameRate: playerCfg.frameRate,
+                repeat: playerCfg.repeat
             });
         });
     }
@@ -29,9 +25,10 @@ export class PlayerManager {
 
         this.scene.physics.add.existing(this.me);
         this.me.body.setCollideWorldBounds(true);
-        // Hitbox solo en los pies (16x10) para evitar colisiones con la cabeza
-        this.me.body.setSize(16, 10);
-        this.me.body.setOffset(-8, 18);
+        // Hitbox configurada centralizadamente
+        const hb = HitboxConfig.player;
+        this.me.body.setSize(hb.width, hb.height);
+        this.me.body.setOffset(hb.offsetX, hb.offsetY);
         this.me.setDepth(10);
 
         return this.me;
@@ -40,7 +37,7 @@ export class PlayerManager {
     createPlayerSprite(x, y, color, name, isMe = false) {
         const container = this.scene.add.container(x, y);
         const sprite = this.scene.add.sprite(0, 0, 'player_idle_1'); // Imagen inicial
-        sprite.setScale(2); // Jugador más grande
+        sprite.setScale(SpriteConfig.player.scale); // Jugador más grande
 
         const text = this.scene.add.text(0, -45, name, {
             fontSize: '12px',

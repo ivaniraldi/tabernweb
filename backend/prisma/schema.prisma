@@ -11,15 +11,16 @@ datasource db {
 }
 
 model User {
-  id           Int      @id @default(autoincrement())
-  email        String   @unique
-  username     String   @unique
-  passwordHash String
-  role         String   @default("user") // "user", "admin", "dev"
-  createdAt    DateTime @default(now())
-  player       Player?
-  friends      Friendship[] @relation("UserFriends")
-  friendOf     Friendship[] @relation("FriendToUser")
+  id              Int      @id @default(autoincrement())
+  email           String   @unique
+  username        String   @unique
+  passwordHash    String
+  role            String   @default("user")
+  createdAt       DateTime @default(now())
+  lastChestClaim  DateTime?
+  players         Player[]
+  friends         Friendship[] @relation("UserFriends")
+  friendOf        Friendship[] @relation("FriendToUser")
 }
 
 model Friendship {
@@ -37,8 +38,10 @@ model Friendship {
 
 model Player {
   id             Int             @id @default(autoincrement())
-  userId         Int             @unique
+  userId         Int
   user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String          @default("Aventurero")
+  class          String          @default("guerrero") // "guerrero", "mago", "arquero", "tanque"
   x              Float           @default(0.0)
   y              Float           @default(0.0)
   mapId          String          @default("map1")
@@ -53,6 +56,9 @@ model Player {
   lastOnline     DateTime        @default(now())
   equipment      Json            @default("{}")
   messages       Message[]
+  playerQuests   PlayerQuest[]
+
+  @@unique([name])
 }
 
 model Item {
@@ -68,6 +74,7 @@ model Item {
   sprite_url     String?
   slot           String?
   stats          Json?
+  allowedClasses  String          @default("all") // "all" o clases separadas por coma: "guerrero,tanque"
   levelRequired  Int             @default(1)
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
@@ -91,5 +98,36 @@ model Message {
   playerId  Int
   player    Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
   content   String
+  createdAt DateTime @default(now())
+}
+
+model Quest {
+  id            Int           @id @default(autoincrement())
+  title         String
+  description   String
+  rewardGold    Int           @default(0)
+  rewardExp     Int           @default(0)
+  requirement   Json?         // { "level": 5, "stat": "str", "value": 10 }
+  playerQuests  PlayerQuest[]
+}
+
+model PlayerQuest {
+  id        Int      @id @default(autoincrement())
+  playerId  Int
+  questId   Int
+  status    String   @default("IN_PROGRESS") // "IN_PROGRESS", "COMPLETED"
+  progress  Int      @default(0)
+  player    Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  quest     Quest    @relation(fields: [questId], references: [id], onDelete: Cascade)
+  updatedAt DateTime @updatedAt
+
+  @@unique([playerId, questId])
+}
+
+model GameLog {
+  id        Int      @id @default(autoincrement())
+  type      String   // "TRADE", "CASINO", "AUTH", "SECURITY", "SYSTEM"
+  content   String
+  playerId  Int?
   createdAt DateTime @default(now())
 }

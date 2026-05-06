@@ -45,6 +45,15 @@ export class NetworkManager {
             this.updateRemotePlayer(pid, data.x, data.y);
         }
 
+        // --- SISTEMA DE TICKS (20Hz) ---
+        if (data.type === 'world_tick') {
+            data.players.forEach(p => {
+                const pid = Number(p.id);
+                if (pid === myId) return;
+                this.updateRemotePlayer(pid, p.x, p.y);
+            });
+        }
+
         if (data.type === 'player_left') {
             const pid = Number(data.playerId);
             const remotePlayer = this.players.get(pid);
@@ -109,10 +118,12 @@ export class NetworkManager {
                         targets: remotePlayer,
                         x: x,
                         y: y,
-                        duration: 150,
-                        ease: 'Power1',
+                        duration: 100, // Ajustado para Tick Rate de 50ms
+                        ease: 'Linear',
                         onUpdate: () => {
-                            remotePlayer.setDepth(remotePlayer.y + 28);
+                            if (remotePlayer && remotePlayer.active) {
+                                remotePlayer.setDepth(remotePlayer.y + 28);
+                            }
                         },
                         onComplete: () => {
                             if (sprite && sprite.active && !this.scene.tweens.isTweening(remotePlayer)) {

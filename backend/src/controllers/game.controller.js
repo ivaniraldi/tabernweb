@@ -1,4 +1,5 @@
 const prisma = require("../lib/prisma");
+const logService = require("../services/logService");
 
 const getPlayerState = async (req, res) => {
     try {
@@ -242,11 +243,256 @@ const upgradeStat = async (req, res) => {
     }
 };
 
+const playSlots = async (req, res) => {
+    try {
+        const playerId = parseInt(req.body.playerId);
+        const bet = parseInt(req.body.bet);
+
+        if (isNaN(bet) || bet < 5 || bet > 1000) {
+            return res.status(400).json({ error: "La apuesta debe estar entre 5 y 1000 de oro" });
+        }
+
+        const player = await prisma.player.findUnique({ where: { id: playerId } });
+        if (!player) return res.status(404).json({ error: "Jugador no encontrado" });
+        if (player.gold < bet) return res.status(400).json({ error: "No tienes suficiente oro" });
+
+        const stats = typeof player.stats === 'string' ? JSON.parse(player.stats) : player.stats;
+        const luck = stats.luk || 0;
+
+        // --- LÓGICA DE CASINO RIGUROSA ---
+        
+        // 1. Probabilidad base reducida drásticamente (12% base)
+        let winChance = 120; // Sobre 1000
+
+        // 2. Bonus por Suerte (LUK): Cada punto aporta +0.5%, tope de +10%
+        const luckBonus = Math.min(luck * 5, 100); 
+        winChance += luckBonus;
+
+        // 3. Penalización por Magnitud de Apuesta: A mayor apuesta, mayor riesgo para la casa
+        // Si apuestas más de 500, la probabilidad baja un 3%
+        if (bet > 500) winChance -= 30;
+        // Si apuestas el máximo (1000), baja un 5% total
+        if (bet === 1000) winChance -= 20;
+
+        // 4. Penalización por Riqueza: Si el jugador ya es rico, la casa se vuelve más tacaña
+        if (player.gold > 10000) winChance -= 20;
+
+        // Asegurar que la probabilidad no sea negativa o absurda
+        winChance = Math.max(winChance, 50); // Mínimo 5% de chance
+
+        const winRoll = Math.random() * 1000;
+        
+        const symbols = ['🍒', '🍋', '🍊', '🔔', '💎', '7️⃣'];
+        const weights = [450, 250, 150, 80, 50, 20]; // Pesos de los premios (Suma 1000)
+        
+        let resultReels = [];
+        let winMultiplier = 0;
+        let isWin = false;
+
+        if (winRoll < winChance) {
+            // VICTORIA REAL
+            isWin = true;
+            const subRoll = Math.random() * 1000;
+            let current = 0;
+            let winIndex = 0;
+            
+            for (let i = 0; i < symbols.length; i++) {
+                current += weights[i];
+                if (subRoll <= current) {
+                    winIndex = i;
+                    break;
+                }
+            }
+            const winSymbol = symbols[winIndex];
+            // Multiplicadores iniciando en 0.8x
+            const multipliers = [0.8, 1.5, 3, 5, 15, 30];
+            winMultiplier = multipliers[winIndex];
+            resultReels = [winSymbol, winSymbol, winSymbol];
+        } else {
+            // PÉRDIDA
+            // Lógica de "Casi Ganas" (Teasing): Si el roll estuvo cerca, mostramos 2 iguales
+            const isNearMiss = winRoll < (winChance + 150); // 15% de chance de "casi"
+            
+            if (isNearMiss) {
+                const nearSymbol = symbols[Math.floor(Math.random() * symbols.length)];
+                let thirdSymbol;
+                do {
+                    thirdSymbol = symbols[Math.floor(Math.random() * symbols.length)];
+                } while (thirdSymbol === nearSymbol);
+
+                // Mezclar la posición del diferente para que sea creíble
+                const positions = [
+                    [nearSymbol, nearSymbol, thirdSymbol],
+                    [nearSymbol, thirdSymbol, nearSymbol],
+                    [thirdSymbol, nearSymbol, nearSymbol]
+                ];
+                resultReels = positions[Math.floor(Math.random() * positions.length)];
+            } else {
+                // Pérdida total aleatoria
+                while (true) {
+                    resultReels = [
+                        symbols[Math.floor(Math.random() * symbols.length)],
+                        symbols[Math.floor(Math.random() * symbols.length)],
+                        symbols[Math.floor(Math.random() * symbols.length)]
+                    ];
+                    if (resultReels[0] !== resultReels[1] || resultReels[1] !== resultReels[2]) break;
+                }
+            }
+        }
+
+        const winAmount = Math.floor(bet * winMultiplier);
+        const netGain = winAmount - bet;
+
+        const updatedPlayer = await prisma.player.update({
+            where: { id: playerId },
+            data: { gold: { increment: netGain } },
+            include: { inventoryItems: { include: { item: true } } }
+        });
+
+        // Log the play
+        logService.casino(`Slot play: Bet ${bet} | Result ${resultReels.join('|')} | Win ${winAmount}`, playerId);
+
+        res.json({
+            reels: resultReels,
+            isWin,
+            winAmount,
+            player: updatedPlayer,
+            message: isWin ? `¡INCREÍBLE! HAS GANADO ${winAmount} DE ORO` : 'La casa siempre gana...'
+        });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Error en la máquina de slots" });
+    }
+};
+
+const gatherItem = async (req, res) => {
+    try {
+        const playerId = parseInt(req.body.playerId);
+        const { itemName, quantity, giveExp } = req.body;
+
+        const item = await prisma.item.findUnique({ where: { name: itemName } });
+        if (!item) return res.status(404).json({ error: "Item no encontrado" });
+
+        // Extraer Tier del nombre (ej: "Piedra T1" -> 1)
+        const tierMatch = itemName.match(/T(\d+)/);
+        const tier = tierMatch ? parseInt(tierMatch[1]) : 1;
+
+        let experienceToGain = 0;
+        if (giveExp) {
+            const player = await prisma.player.findUnique({ where: { id: playerId } });
+            if (player) {
+                // Calcular nivel actual con la misma fórmula del frontend
+                const xp = player.experience;
+                const n = Math.floor((-50 + Math.sqrt(2500 + 400 * xp)) / 200);
+                const currentLevel = Math.max(1, n + 1);
+
+                // Fórmula: (Base 5 * Tier) + (Nivel / 2)
+                experienceToGain = (5 * tier) + Math.floor(currentLevel / 2);
+            }
+        }
+
+        const updateData = {
+            inventoryItems: {
+                upsert: {
+                    where: {
+                        playerId_itemId: { playerId, itemId: item.id }
+                    },
+                    update: {
+                        quantity: { increment: quantity }
+                    },
+                    create: {
+                        itemId: item.id,
+                        quantity: quantity
+                    }
+                }
+            }
+        };
+
+        if (experienceToGain > 0) {
+            updateData.experience = { increment: experienceToGain };
+        }
+
+        const updatedPlayer = await prisma.player.update({
+            where: { id: playerId },
+            data: updateData,
+            include: { inventoryItems: { include: { item: true } } }
+        });
+
+        res.json({ 
+            message: "Recolectado con éxito", 
+            player: updatedPlayer,
+            expGained: experienceToGain 
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Error recolectando ítems" });
+    }
+};
+
+const claimChest = async (req, res) => {
+    try {
+        const { userId, playerId } = req.body;
+
+        if (!userId || !playerId) {
+            return res.status(400).json({ error: "userId and playerId are required" });
+        }
+
+        const user = await prisma.user.findUnique({ where: { id: parseInt(userId) } });
+        if (!user) return res.status(404).json({ error: "User not found" });
+
+        const now = new Date();
+        const COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 horas
+
+        if (user.lastChestClaim) {
+            const elapsed = now - new Date(user.lastChestClaim);
+            if (elapsed < COOLDOWN_MS) {
+                const remaining = COOLDOWN_MS - elapsed;
+                const hours = Math.floor(remaining / (1000 * 60 * 60));
+                const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
+                return res.status(429).json({
+                    error: "Cofre en enfriamiento",
+                    remainingMs: remaining,
+                    message: `Podrás reclamar el cofre en ${hours}h ${minutes}m`
+                });
+            }
+        }
+
+        const GOLD_REWARD = 100;
+
+        // Actualizar timestamp en User y oro en Player en paralelo
+        const [updatedPlayer] = await Promise.all([
+            prisma.player.update({
+                where: { id: parseInt(playerId) },
+                data: { gold: { increment: GOLD_REWARD } },
+                include: { inventoryItems: { include: { item: true } } }
+            }),
+            prisma.user.update({
+                where: { id: parseInt(userId) },
+                data: { lastChestClaim: now }
+            })
+        ]);
+
+        res.json({
+            message: "¡Cofre reclamado con éxito!",
+            goldReward: GOLD_REWARD,
+            player: updatedPlayer
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
 module.exports = {
     getPlayerState,
     updatePlayerState,
     getShopItems,
     buyItem,
     sellItem,
-    upgradeStat
+    upgradeStat,
+    playSlots,
+    gatherItem,
+    claimChest
 };
+

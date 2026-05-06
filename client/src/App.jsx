@@ -16,6 +16,9 @@ import { ChestModal } from './components/ChestModal';
 import { DoorModal } from './components/DoorModal';
 import { TradeModal } from './components/TradeModal';
 import { SocialModal } from './components/SocialModal';
+import { SlotModal } from './components/SlotModal';
+import { GatheringModal } from './components/GatheringModal';
+import { GatheringConfirmModal } from './components/GatheringConfirmModal';
 import { showAlert, showConfirm, closeAllModals } from './lib/swalConfig';
 
 
@@ -35,7 +38,7 @@ function App() {
     const [user, setUser] = useState(null);
     const [token, setToken] = useState(null);
 
-    const socketUrl = user ? WS_URL : null;
+    const socketUrl = (user && user.player) ? WS_URL : null;
     const { isConnected, sendMessage } = useSocket(socketUrl);
     const [pos, setPos] = useState({ x: 0, y: 0 });
     const [isGameReady, setIsGameReady] = useState(false);
@@ -51,14 +54,20 @@ function App() {
     const [isTradeOpen, setIsTradeOpen] = useState(false);
     const [tradeData, setTradeData] = useState(null); // { otherId, otherPlayerName, otherOffers: { gold, items, confirmed }, meConfirmed, myOffer: { gold, items } }
     const [chestData, setChestData] = useState(null);
+    const [isSlotsOpen, setIsSlotsOpen] = useState(false);
 
 
     const [doorData, setDoorData] = useState(null);
+    const [gatheringData, setGatheringData] = useState(null); // { itemName, sessionAmount }
+    const [gatheringConfirmData, setGatheringConfirmData] = useState(null); // { itemName }
     const [settings, setSettings] = useState({
         showChatBubbles: true,
         showOtherPlayers: true,
-        enableMusic: false
+        enableMusic: false,
+        zoom: 0,
+        showHitboxes: false
     });
+
     const phaserRef = useRef(null);
 
     // Estado de carga
@@ -66,6 +75,16 @@ function App() {
     const [currentMapId, setCurrentMapId] = useState('map1');
     const [isChatVisible, setIsChatVisible] = useState(false);
     const [minLoadingDone, setMinLoadingDone] = useState(false);
+
+    const isAnyModalOpen = isSettingsOpen || isInventoryOpen || isShopOpen || profileTargetId || isSocialOpen || chestData || doorData || isSlotsOpen || gatheringData || gatheringConfirmData || isTradeOpen;
+    const showLoading = user && (!isConnected || !isGameReady || !minLoadingDone);
+
+    // Sincronizar el mapa inicial desde el personaje seleccionado
+    useEffect(() => {
+        if (user?.player?.mapId) {
+            setCurrentMapId(user.player.mapId);
+        }
+    }, [user?.player?.id]); // Solo cuando cambia el personaje activo
 
     useEffect(() => {
         if (user) {
@@ -237,13 +256,54 @@ function App() {
         EventBus.on('open-chest', handleOpenChest);
         EventBus.on('open-door', handleOpenDoor);
         EventBus.on('open-shop', handleOpenShop);
+        EventBus.on('open-slots', () => setIsSlotsOpen(true));
+        EventBus.on('player-data-updated', (playerData) => {
+            setUser(prev => ({ ...prev, player: playerData }));
+        });
+        EventBus.on('start-gathering', (data) => setGatheringData({ ...data, sessionAmount: 0 }));
+        EventBus.on('update-gathering-session', (amount) => {
+            setGatheringData(prev => prev ? { ...prev, sessionAmount: amount } : null);
+        });
+        EventBus.on('stop-gathering', () => setGatheringData(null));
+        EventBus.on('open-gathering-confirm', (data) => setGatheringConfirmData(data));
         
         return () => {
             EventBus.off('open-chest', handleOpenChest);
             EventBus.off('open-door', handleOpenDoor);
             EventBus.off('open-shop', handleOpenShop);
+            EventBus.off('open-slots');
+            EventBus.off('player-data-updated');
+            EventBus.off('start-gathering');
+            EventBus.off('update-gathering-session');
+            EventBus.off('stop-gathering');
+            EventBus.off('open-gathering-confirm');
         };
     }, []);
+
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (!e.key) return;
+            // Bloquear si hay un input enfocado
+            if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return;
+
+            if (e.key.toLowerCase() === 'i') {
+                if (isAnyModalOpen && !isInventoryOpen) return;
+                setIsInventoryOpen(prev => !prev);
+            }
+            if (e.key.toLowerCase() === 'p') {
+                if (isAnyModalOpen && !profileTargetId) return;
+                if (user && user.player) {
+                    setProfileTargetId(prev => prev ? null : user.player.id);
+                }
+            }
+            if (e.key.toLowerCase() === 'o') {
+                if (isAnyModalOpen && !isSocialOpen) return;
+                setIsSocialOpen(prev => !prev);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [user, isAnyModalOpen, isInventoryOpen, profileTargetId, isSocialOpen]); // Añadir dependencias para evitar cierres obsoletos
 
     useEffect(() => {
         const handleShowMenu = (data) => {
@@ -309,9 +369,6 @@ function App() {
         };
     }, [sendMessage]);
 
-    const isAnyModalOpen = isSettingsOpen || isInventoryOpen || isShopOpen || profileTargetId || isSocialOpen || chestData || doorData;
-    const showLoading = user && (!isConnected || !isGameReady || !minLoadingDone);
-
     useEffect(() => {
         if (isGameReady) {
             EventBus.emit('chat-focus', isAnyModalOpen || showLoading);
@@ -331,16 +388,20 @@ function App() {
 
     const claimChest = async () => {
         try {
-            const updatedUser = { ...user };
-            updatedUser.player.gold += 100;
-            setUser(updatedUser);
-            
-            await fetch(`${BACKEND_URL}/api/game/player/${user.player.id}`, {
-                method: 'PUT',
+            const res = await fetch(`${BACKEND_URL}/api/game/chest/claim`, {
+                method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ gold: updatedUser.player.gold })
+                body: JSON.stringify({ userId: user.id, playerId: user.player.id })
             });
-            
+            const data = await res.json();
+
+            if (!res.ok) {
+                // Mostrar el mensaje de cooldown en el modal
+                setChestData(prev => ({ ...prev, cooldownMessage: data.message }));
+                return;
+            }
+
+            setUser({ ...user, player: data.player });
             setChestData(null);
         } catch (err) {
             console.error('Error claiming chest:', err);
@@ -526,7 +587,7 @@ function App() {
 
     return (
         <div className="app-container">
-            {!user ? (
+            {(!user || !user.player) ? (
                 <Auth onAuthSuccess={handleAuthSuccess} backendUrl={BACKEND_URL} />
             ) : (
                 <>
@@ -569,10 +630,10 @@ function App() {
                                 pos={pos}
                                 isMinimized={isHudMinimized}
                                 onToggleMinimize={() => setIsHudMinimized(!isHudMinimized)}
-                                onOpenSettings={() => setIsSettingsOpen(true)}
-                                onOpenInventory={() => setIsInventoryOpen(true)}
-                                onOpenProfile={() => setProfileTargetId(user.player.id)}
-                                onOpenSocial={() => { console.log("Opening Social Modal"); setIsSocialOpen(true); }}
+                                onOpenSettings={() => { if (!isAnyModalOpen) setIsSettingsOpen(true); }}
+                                onOpenInventory={() => { if (!isAnyModalOpen) setIsInventoryOpen(true); }}
+                                onOpenProfile={() => { if (!isAnyModalOpen) setProfileTargetId(user.player.id); }}
+                                onOpenSocial={() => { if (!isAnyModalOpen) { console.log("Opening Social Modal"); setIsSocialOpen(true); } }}
                             />
                             <Chat
                                 onSendMessage={sendMessage}
@@ -611,6 +672,7 @@ function App() {
                                 <ChestModal 
                                     onClaim={claimChest}
                                     onClose={() => setChestData(null)}
+                                    cooldownMessage={chestData.cooldownMessage}
                                 />
                             )}
 
@@ -654,6 +716,14 @@ function App() {
                                     backendUrl={BACKEND_URL}
                                 />
                             )}
+                            {isSlotsOpen && (
+                                <SlotModal 
+                                    user={user}
+                                    setUser={setUser}
+                                    backendUrl={BACKEND_URL}
+                                    onClose={() => setIsSlotsOpen(false)} 
+                                />
+                            )}
                             {profileTargetId && (
                                 <ProfileModal
                                     user={user}
@@ -666,6 +736,25 @@ function App() {
                                     onSendMessage={handleSendMessageToPlayer}
                                     onTrade={handleTradeRequest}
                                     onClose={() => setProfileTargetId(null)}
+                                />
+                            )}
+                            {gatheringData && (
+                                <GatheringModal 
+                                    itemName={gatheringData.itemName}
+                                    sessionAmount={gatheringData.sessionAmount}
+                                    gatherSpeed={gatheringData.gatherSpeed}
+                                    currentAmount={user.player.inventoryItems.find(i => i.item.name === gatheringData.itemName)?.quantity || 0}
+                                    onClose={() => EventBus.emit('stop-gathering-from-ui')}
+                                />
+                            )}
+                            {gatheringConfirmData && (
+                                <GatheringConfirmModal 
+                                    itemName={gatheringConfirmData.itemName}
+                                    onConfirm={() => {
+                                        EventBus.emit('confirm-gathering');
+                                        setGatheringConfirmData(null);
+                                    }}
+                                    onClose={() => setGatheringConfirmData(null)}
                                 />
                             )}
                         </>

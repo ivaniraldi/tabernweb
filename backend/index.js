@@ -7,7 +7,7 @@ const { WebSocketServer, WebSocket } = require("ws");
 const routes = require("./src/routes");
 const prisma = require("./src/lib/prisma");
 const tradeManager = require("./src/services/tradeManager");
-
+const logService = require("./src/services/logService");
 
 dotenv.config();
 
@@ -32,7 +32,6 @@ const playerStates = new Map();
 
 // WebSocket logic
 wss.on("connection", (socket) => {
-    console.log("Nuevo cliente conectado");
     let currentPlayerId = null;
 
     socket.on("message", async (data) => {
@@ -47,7 +46,7 @@ wss.on("connection", (socket) => {
                 // If this player is already connected, kick the old session
                 wss.clients.forEach((client) => {
                     if (client !== socket && Number(client.playerId) === newPlayerId) {
-                        console.log(`Kicking duplicate session for player ${newPlayerId}`);
+                        console.log(`⚠️  [KICK] Sesión duplicada para "${player?.name}" — cerrando conexión anterior`);
                         client.send(JSON.stringify({ type: "error", message: "Sesión iniciada en otro lugar" }));
                         client.terminate(); // Close old connection
                     }
@@ -70,10 +69,12 @@ wss.on("connection", (socket) => {
                     y: player.y,
                     mapId: initialMapId,
                     color: player.color,
-                    username: player.user?.username || `Jugador ${currentPlayerId}`
+                    username: player.name || `Jugador ${currentPlayerId}`,
+                    class: player.class || 'guerrero'
                 });
                 
-                console.log("Estados activos:", Array.from(playerStates.keys()));
+                const onlinePlayers = Array.from(playerStates.keys());
+                console.log(`🟢 [LOGIN] "${player.name}" (${player.user?.email}) → ${initialMapId} | 👥 Online: ${onlinePlayers.length} jugadores`);
 
                 // 1. Send CURRENT state of players IN THE SAME MAP to the NEW player
                 const playersInMap = Array.from(playerStates.entries())
@@ -96,7 +97,8 @@ wss.on("connection", (socket) => {
                         x: player.x,
                         y: player.y,
                         color: player.color,
-                        username: player.user?.username || `Jugador ${currentPlayerId}`
+                        username: player.name || `Jugador ${currentPlayerId}`,
+                        class: player.class || 'guerrero'
                     }
                 }, currentPlayerId, initialMapId);
 
@@ -153,6 +155,20 @@ wss.on("connection", (socket) => {
                 const { x, y } = payload;
                 const state = playerStates.get(currentPlayerId);
                 if (state) {
+                    // --- ANTI-CHEAT: Validación de Velocidad ---
+                    const dx = x - state.x;
+                    const dy = y - state.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    // Umbral de seguridad: un jugador no debería moverse más de 120px 
+                    // entre actualizaciones de red (aprox 100-200ms)
+                    if (distance > 120) {
+                    console.warn(`🚨 [ANTICHEAT] "${playerStates.get(currentPlayerId)?.username}" movimiento inválido: ${distance.toFixed(0)}px`);
+                        logService.security(`Teleport attempt: ${distance.toFixed(2)}px from (${state.x},${state.y}) to (${x},${y})`, currentPlayerId);
+                        socket.send(JSON.stringify({ type: "player_moved", playerId: currentPlayerId, x: state.x, y: state.y }));
+                        return;
+                    }
+
                     state.x = x;
                     state.y = y;
                     
@@ -169,8 +185,8 @@ wss.on("connection", (socket) => {
                         state.lastDbUpdate = Date.now();
                     }
 
-                    // Only broadcast move to players in the same map
-                    broadcast({ type: "player_moved", playerId: currentPlayerId, x, y, mapId: state.mapId }, currentPlayerId, state.mapId);
+                    // YA NO HACEMOS BROADCAST AQUÍ. 
+                    // El broadcast se hace en el intervalo de Ticks.
                 }
             }
 
@@ -205,6 +221,16 @@ wss.on("connection", (socket) => {
                         const invItem = player.inventoryItems.find(i => i.id === inventoryItemId);
                         if (invItem && (invItem.item.type === 'EQUIPMENT' || invItem.item.type === 'ARMOR' || invItem.item.type === 'WEAPON') && invItem.item.slot) {
                             
+                            // Check if class is allowed
+                            const allowedClasses = invItem.item.allowedClasses || "all";
+                            if (allowedClasses !== "all") {
+                                const classesArray = allowedClasses.split(",").map(c => c.trim().toLowerCase());
+                                if (!classesArray.includes(player.class.toLowerCase())) {
+                                    socket.send(JSON.stringify({ type: "error", message: `❌ Tu clase (${player.class}) no puede usar este objeto.` }));
+                                    return;
+                                }
+                            }
+
                             // Check if an item is already equipped in this slot
                             let currentEquipment = player.equipment || {};
                             if (typeof currentEquipment === 'string') currentEquipment = JSON.parse(currentEquipment);
@@ -313,6 +339,22 @@ wss.on("connection", (socket) => {
                                 });
                             }
 
+                            // Check for level up
+                            const calculateLevel = (xp) => {
+                                if (xp <= 0) return 1;
+                                const n = Math.floor((-50 + Math.sqrt(2500 + 400 * xp)) / 200);
+                                return Math.max(1, n + 1);
+                            };
+
+                            const oldLevel = calculateLevel(player.experience);
+                            const newLevel = calculateLevel(player.experience + xpGain);
+                            let statPointsGain = 0;
+                            
+                            if (newLevel > oldLevel) {
+                                statPointsGain = (newLevel - oldLevel) * 3;
+                                message += `. ¡Has subido al nivel ${newLevel}! (+${statPointsGain} puntos de stat)`;
+                            }
+
                             // Update Player
                             const updatedPlayer = await prisma.player.update({
                                 where: { id: currentPlayerId },
@@ -320,6 +362,7 @@ wss.on("connection", (socket) => {
                                     gold: { increment: goldGain },
                                     diamonds: { increment: diamondGain },
                                     experience: { increment: xpGain },
+                                    statPoints: { increment: statPointsGain },
                                     stats: stats
                                 }
                             });
@@ -507,30 +550,26 @@ wss.on("connection", (socket) => {
 
     socket.on("close", async () => {
         if (currentPlayerId) {
-            console.log(`Jugador ${currentPlayerId} desconectado. Guardando posición...`);
             const state = playerStates.get(currentPlayerId);
-            
+            const name = state?.username || `#${currentPlayerId}`;
+
             if (state) {
                 try {
-                    // Persist position to DB
+                    const oldMapId = state.mapId;
+
                     await prisma.player.update({
                         where: { id: currentPlayerId },
                         data: {
                             x: state.x,
                             y: state.y,
                             mapId: state.mapId,
-                            lastOnline: new Date(Date.now() - 600000) // 10 min atrás para que figure offline ya
+                            lastOnline: new Date(Date.now() - 600000)
                         }
                     });
-                    
-                    const oldMapId = state.mapId;
-                    // Remove from active states
+
                     playerStates.delete(currentPlayerId);
-                    
-                    // Inform others in the same map
                     broadcast({ type: "player_left", playerId: currentPlayerId }, null, oldMapId);
 
-                    // Cancel any active trades
                     const tradeCancel = tradeManager.cancelTrade(currentPlayerId);
                     if (tradeCancel) {
                         tradeCancel.participants.forEach(pid => {
@@ -541,11 +580,14 @@ wss.on("connection", (socket) => {
                         });
                     }
                 } catch (err) {
-                    console.error(`Error saving position for player ${currentPlayerId}:`, err);
+                    console.error(`❌ Error al desconectar jugador ${currentPlayerId}:`, err);
                 }
+            } else {
+                playerStates.delete(currentPlayerId);
             }
+
+            console.log(`🔴 [LOGOUT] "${name}" se desconectó | 👥 Online: ${playerStates.size} jugadores`);
         }
-        console.log("Cliente desconectado");
     });
 });
 
@@ -569,11 +611,35 @@ function broadcast(data, skipClientId = null, targetMapId = null) {
             count++;
         }
     });
-    console.log(`[Broadcast] Type: ${data.type} | Map: ${targetMapId || 'GLOBAL'} | Clients: ${count}`);
 }
 
+// --- SISTEMA DE TICKS (20Hz) ---
+// Emitimos el estado del mundo cada 50ms para optimizar el ancho de banda
+setInterval(() => {
+    // Agrupamos jugadores por mapa para broadcasts eficientes
+    const maps = new Set();
+    playerStates.forEach(state => maps.add(state.mapId));
+
+    maps.forEach(mapId => {
+        const playersInMap = Array.from(playerStates.entries())
+            .filter(([id, state]) => state.mapId === mapId)
+            .map(([id, state]) => ({
+                id: Number(id),
+                x: state.x,
+                y: state.y
+            }));
+
+        if (playersInMap.length > 0) {
+            broadcast({
+                type: "world_tick",
+                players: playersInMap
+            }, null, mapId);
+        }
+    });
+}, 50);
+
 const PORT = process.env.PORT || 3000;
-// Periódicamente guardamos la posición y el estado online de todos
+// Periódicamente guardamos la posición y el estado online de todos en DB
 setInterval(async () => {
     for (const [id, state] of playerStates.entries()) {
         try {

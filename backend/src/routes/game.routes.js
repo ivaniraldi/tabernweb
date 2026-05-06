@@ -5,7 +5,10 @@ const {
     getShopItems, 
     buyItem, 
     sellItem,
-    upgradeStat
+    upgradeStat,
+    playSlots,
+    gatherItem,
+    claimChest
 } = require("../controllers/game.controller");
 
 const router = Router();
@@ -17,5 +20,8 @@ router.get("/shop", getShopItems);
 router.post("/buy", buyItem);
 router.post("/sell", sellItem);
 router.post("/upgrade-stat", upgradeStat);
+router.post("/slots", playSlots);
+router.post("/gather", gatherItem);
+router.post("/chest/claim", claimChest);
 
 module.exports = router;

@@ -42,12 +42,23 @@ export const Chat = ({ onSendMessage, myPlayerId, disabled, isVisible, onToggle 
             }, 50);
         };
 
+        const handleLocalMessage = (data) => {
+            setMessages(prev => [...prev, {
+                ...data,
+                username: 'SISTEMA',
+                color: '#10b981', // Verde esmeralda para sistema
+                message: data.message
+            }]);
+        };
+
         EventBus.on('server_message', handleServerMessage);
         EventBus.on('chat-prefill', handlePrefill);
+        EventBus.on('local-chat-message', handleLocalMessage);
         
         return () => {
             EventBus.off('server_message', handleServerMessage);
             EventBus.off('chat-prefill', handlePrefill);
+            EventBus.off('local-chat-message', handleLocalMessage);
         };
     }, [onToggle]);
 
@@ -58,7 +69,10 @@ export const Chat = ({ onSendMessage, myPlayerId, disabled, isVisible, onToggle 
                 if (document.activeElement.id === 'chat-input') {
                     // Handled by onSubmit
                 } else {
-                    toggleChat(true);
+                    onToggle(true);
+                    setTimeout(() => {
+                        document.getElementById('chat-input')?.focus();
+                    }, 50);
                 }
             }
         };
@@ -74,12 +88,14 @@ export const Chat = ({ onSendMessage, myPlayerId, disabled, isVisible, onToggle 
     const toggleChat = (show) => {
         if (disabled && show) return;
         onToggle(show);
-        EventBus.emit('chat-focus', show);
     };
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        if (!input.trim()) return;
+        if (!input.trim()) {
+            document.getElementById('chat-input')?.blur();
+            return;
+        }
 
         // Command parsing: /msg {username} {message}
         if (input.startsWith('/msg ')) {
@@ -89,12 +105,14 @@ export const Chat = ({ onSendMessage, myPlayerId, disabled, isVisible, onToggle 
                 const message = parts.slice(2).join(' ');
                 onSendMessage({ type: 'private_message', toUsername, message });
                 setInput('');
+                document.getElementById('chat-input')?.blur();
                 return;
             }
         }
 
         onSendMessage({ type: 'chat', message: input });
         setInput('');
+        document.getElementById('chat-input')?.blur();
     };
 
     return (

@@ -5,6 +5,7 @@ import { PlayerManager } from './managers/PlayerManager';
 import { InputManager } from './managers/InputManager';
 import { NetworkManager } from './managers/NetworkManager';
 import { AudioManager } from './managers/AudioManager';
+import { SpriteConfig } from './SpriteConfig';
 
 export class MainScene extends Phaser.Scene {
     constructor() {
@@ -26,35 +27,45 @@ export class MainScene extends Phaser.Scene {
     }
 
     preload() {
-        // Nuevos sprites del jugador (Frames individuales)
-        const anims = [
-            { folder: 'DownWalk', prefix: 'DownWalk', key: 'down', frames: 6 },
-            { folder: 'UpWalk', prefix: 'UpWalk', key: 'up', frames: 6 },
-            { folder: 'SideWalk', prefix: 'SideWalk', key: 'side', frames: 6 },
-            { folder: 'DownRightWalk', prefix: 'DownSideWalk', key: 'down_side', frames: 6 },
-            { folder: 'UpSideWalk', prefix: 'UpSideWalk', key: 'up_side', frames: 6 },
-            { folder: 'Idle', prefix: 'IdleAnimation', key: 'idle', frames: 10 }
-        ];
-
-        anims.forEach(anim => {
+        // Cargar sprites del jugador dinámicamente desde la configuración
+        const playerCfg = SpriteConfig.player;
+        playerCfg.animations.forEach(anim => {
             for (let i = 1; i <= anim.frames; i++) {
-                this.load.image(`player_${anim.key}_${i}`, `assets/player_sprites/${anim.folder}/${anim.prefix}${i}.png`);
+                const key = `${anim.loadPrefix}${i}`;
+                const path = `${playerCfg.basePath}/${anim.folder}/${anim.filePrefix}${i}.png`;
+                this.load.image(key, path);
             }
         });
 
-        this.load.image('tiles', 'assets/tiles.png');
-        this.load.image('tiles_outside', 'assets/tiles_outside.png');
-        this.load.image('objects', 'assets/furniture_and_props.png');
-        this.load.image('doors', 'assets/windows_and_doors.png');
-        this.load.image('npc_shop', 'assets/furniture_and_props_sprites/00_npc.png');
-        this.load.image('chest', 'assets/furniture_and_props_sprites/01_chest.png');
-        
-        this.load.tilemapTiledJSON('map1', 'assets/tilemaps/tilemap.json');
-        this.load.tilemapTiledJSON('map2', 'assets/tilemaps/2map.json');
+        // Cargar assets estáticos (tilesets, sprites de objetos)
+        Object.entries(SpriteConfig.assets).forEach(([key, config]) => {
+            const path = typeof config === 'string' ? config : config.path;
+            this.load.image(key, path);
+        });
+
+        // Cargar spritesheets
+        if (SpriteConfig.spritesheets) {
+            Object.entries(SpriteConfig.spritesheets).forEach(([key, config]) => {
+                this.load.spritesheet(key, config.path, {
+                    frameWidth: config.frameWidth,
+                    frameHeight: config.frameHeight
+                });
+            });
+        }
+
+        // Cargar mapas
+        Object.entries(SpriteConfig.maps).forEach(([key, path]) => {
+            this.load.tilemapTiledJSON(key, path);
+        });
     }
 
     create() {
         this.input.mouse.disableContextMenu();
+        this.input.on('pointerdown', () => {
+            if (document.activeElement && document.activeElement.id === 'chat-input') {
+                document.activeElement.blur();
+            }
+        });
 
         // Inicializar managers
         this.mapManager = new MapManager(this);
@@ -76,7 +87,7 @@ export class MainScene extends Phaser.Scene {
         });
 
         // Crear jugador local
-        const me = this.playerManager.createLocalPlayer(initialPos, this.myData.username);
+        const me = this.playerManager.createLocalPlayer(initialPos, this.myData.player?.name || this.myData.username);
 
         // Configurar colisiones de las capas del mapa
         if (this.mapManager.layers['walls']) {
@@ -103,11 +114,7 @@ export class MainScene extends Phaser.Scene {
             me.setPosition(worldWidth / 2, worldHeight / 2);
         }
 
-        const isMobile = this.scale.width < 768;
-        const topPadding = isMobile ? 150 : 0;
-        const bottomPadding = isMobile ? 100 : 0;
-
-        this.cameras.main.setBounds(0, -topPadding, worldWidth, worldHeight + topPadding + bottomPadding);
+        this.cameras.main.setBounds(0, 0, worldWidth, worldHeight);
         this.cameras.main.setZoom(1 + (this.settings?.zoom || 0));
         // Desactivamos el follow automático para controlar el redondeo manualmente
         // this.cameras.main.startFollow(me, true, 1, 1);
@@ -195,10 +202,12 @@ export class MainScene extends Phaser.Scene {
         const { vx, vy, isRunning } = this.inputManager.getMovementInput();
         const moved = this.playerManager.updatePlayerMovement(vx, vy, isRunning);
 
-        // Seguir manualmente redondeando a enteros para evitar vibración en diagonal
+        // Centrado manual corregido para zoom
         const cam = this.cameras.main;
-        const halfWidth = cam.width / 2;
-        const halfHeight = cam.height / 2;
+        const zoom = cam.zoom;
+        const halfWidth = cam.width / (2 * zoom);
+        const halfHeight = cam.height / (2 * zoom);
+        
         cam.setScroll(
             Math.round(this.playerManager.me.x - halfWidth),
             Math.round(this.playerManager.me.y - halfHeight)

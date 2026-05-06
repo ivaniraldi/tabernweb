@@ -162,14 +162,20 @@ export const InventoryModal = ({ inventoryItems = [], equipment = {}, onEquip, o
                                 
                                 {inspectingItem.type !== 'CONSUMABLE' && inspectingItem.stats && (
                                     <div className="v2-insp-stats">
-                                        {Object.entries(inspectingItem.stats).filter(([_,v])=>v>0).map(([k,v]) => (
+                                        {Object.entries(inspectingItem.stats).map(([k, v]) => (
                                             <div key={k} className="v2-stat-row">
-                                                <span>{k.toUpperCase()}</span>
-                                                <span>+{v}</span>
+                                                <span className="stat-name">{k.toUpperCase()}</span>
+                                                <span className="stat-val">+{v}</span>
                                             </div>
                                         ))}
                                     </div>
                                 )}
+                                <div className="v2-insp-stats consumable-effects" style={{ marginTop: '8px' }}>
+                                    <span className="insp-label">Clase requerida:</span>
+                                    <span style={{ fontSize: '0.8rem', color: '#94a3b8', textTransform: 'capitalize' }}>
+                                        {inspectingItem.allowedClasses === 'all' ? 'Todas' : inspectingItem.allowedClasses}
+                                    </span>
+                                </div>
                                 {inspectingItem.type === 'CONSUMABLE' && inspectingItem.stats?.effects && (
                                      <div className="v2-insp-stats consumable-effects">
                                          <span className="insp-label">Efectos al usar:</span>

@@ -13,17 +13,23 @@ const getFriends = async (req, res) => {
             },
             include: {
                 friend: {
-                    include: { player: true }
+                    include: { players: true }
                 }
             }
         });
 
-        const friends = friendships.map(f => ({
-            id: f.friend.id,
-            username: f.friend.username,
-            playerId: f.friend.player?.id,
-            isOnline: f.friend.player ? (Date.now() - new Date(f.friend.player.lastOnline).getTime() < 180000) : false
-        }));
+        const friends = friendships.map(f => {
+            // Usar el personaje más reciente del amigo para determinar si está online
+            const latestPlayer = f.friend.players?.sort(
+                (a, b) => new Date(b.lastOnline) - new Date(a.lastOnline)
+            )[0];
+            return {
+                id: f.friend.id,
+                username: f.friend.username,
+                playerId: latestPlayer?.id,
+                isOnline: latestPlayer ? (Date.now() - new Date(latestPlayer.lastOnline).getTime() < 180000) : false
+            };
+        });
 
         res.json(friends);
     } catch (error) {
